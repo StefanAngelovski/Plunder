@@ -1,0 +1,118 @@
+List of Supported Consoles and ROM Folders:
+
+=== CONSOLES ===
+Atari 2600 - ATARI2600
+Atari 5200 - ATARI5200
+Atari 7800 - ATARI7800
+Colecovision - COLECO
+Colecovision - COLSGM
+Uzebox - UZEBOX
+Fairchild Channel F - CHANNELF
+Vectrex - VECTREX
+Videopac G7000 - VIDEOPAC
+Intellivision - INTELLIVISION
+PC Engine - PCE
+PC Engine CD-Rom - PCECD
+PC Engine SuperGrafx - SFX
+PC-FX - PCFX
+Family Computer Disk System - FDS
+NES - FC
+Nintendo 64 - N64
+Nintendo 64DD - N64DD
+Satellaview - SATELLAVIEW
+Super Nintendo - SFC
+Super Nintendo MSU-1 - SFCMSU
+3DO - PANASONIC
+Dreamcast - DC
+Master System - MS
+Mega-CD - SEGACD
+Mega Drive - MD
+Mega Drive-MSU - MDMSU
+Mega Drive 32X - SEGA32X
+Saturn - SATURN
+SG-1000 - SG1000
+Neo-Geo - NEOGEO
+Neo-Geo-CD - NEOCD
+Playstation - PS
+
+=== ACCESSORIES ===
+Super Game Boy - SGB
+Sufami Turbo - SUFAMI
+
+=== HANDHELDS ===
+Lynx - LYNX
+WonderSwan - WS
+WonderSwan Color - WSC
+Mega-Duck - MEGADUCK
+Arduboy - ARDUBOY
+Game & Watch - GW
+Game Boy - GB
+Game Boy Advance - GBA
+Game Boy Color - GBC
+DS - NDS
+Pokémon mini - POKEMINI
+Virtual Boy - VB
+Game Gear - GG
+Neo-Geo Pocket - NGP
+Neo-Geo Pocket Color - NGC
+Playstation minis - PSPMINIS
+PSP - PSP
+Watara Supervision - SUPERVISION
+
+=== ARCADE ===
+Atomiswave - ATOMISWAVE
+Out Run - CANNONBALL
+Play System - CPS1
+Play System 2 - CPS2
+Play System 3 - CPS3
+Neo-Geo MVS - FBNEO
+Naomi - NAOMI
+IGS - PGM
+MAME - MAME
+ARC. MAME - MAME2003PLUS
+MAME2010 - MAME2010
+Daphne - DAPHNE
+
+=== COMPUTERS ===
+CPC - CPC
+Mac OS - VMAC
+Atari 8bit - ATARI800
+Atari ST - ATARIST
+Amiga - AMIGA
+Amiga CD - AMIGACD
+Amiga CDTV - AMIGACDTV
+Commodore 64 - C64
+PET - CPET
+Plus/4 - CPLUS4
+Vic-20 - VIC20
+Enterprise 128 - ENTERPRISE
+MSX - MSX
+MSX2 - MSX2
+Dos - DOS
+PC-8801 - PC88
+PC-9801 - PC98
+Palm OS - PALMOS
+X1 - X1
+X68000 - X68000
+ZX Spectrum - ZXS
+TI-83 - TI83
+MO/TO - THOMSON
+TVC - VIDEOTON
+
+=== PORTS ===
+Dinothawr - DINOTHAWR
+DOOM - DOOM
+Flashback - FLASHBACK
+Quake - TYRQUAKE
+Rick Dangerous - XRICK
+Cave Story - CAVESTORY
+
+=== VIRTUAL MACHINES ===
+ChaiLove - CHAILOVE
+EasyRPG - EASYRPG
+LowRes NX - LOWRESNX
+Lutro - LUTRO
+OpenBOR - OPENBOR
+Pico-8 - PICO
+ScummVM - SCUMMVM
+TIC-80 - TIC

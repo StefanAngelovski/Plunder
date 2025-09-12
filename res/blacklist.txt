@@ -1,0 +1,152 @@
+# List of blacklisted console names (one per line, case-insensitive)
+# Hexrom unsupported consoles
+Xbox
+Xbox 360
+Xbox One
+PlayStation 2
+PlayStation 3
+PlayStation 4
+PlayStation 5
+PS2
+PS3
+PS4
+PS5
+Windows
+Wii U
+Acorn 8 bit
+Acorn Archimedes
+Acorn Electron
+Amiga 500
+Amstrad GX4000
+Apple II (A2)
+Apple II GS (A2GS)
+Atari Jaguar (AJAG)
+Bally Pro Arcade Astrocade
+BBC Micro (BBCM)
+Camputers Lynx
+Casio Loopy
+Casio PV1000
+ColecoVision ADAM
+Commodore Pet
+Commodore Plus4 C16
+Commodore VIC20
+Dragon Data Dragon
+Elektronika BK
+Emerson Arcadia 2001
+Epoch Super Cassette Vision
+Funtech Super Acan
+Galaksija
+GameCube ROMs
+GamePark GP32
+GCE Vectrex
+Hartung Game Master
+Interact Family Computer
+MAME 037b11 (MAME)
+Mattel Aquarius
+Memotech MTX512
+Microsoft Xbox
+Miles Gordon Sam Coupe
+Nokia N Gage
+PC
+Pel Varazdin Orao
+PS Vita
+RCA Studio II
+Robotron Z1013
+Sega Pico (SP)
+Sega Super Control Station (SSCS)
+Sega Visual Memory System (SVMS)
+Sharp MZ 700
+Tandy Color Computer
+Tangerine Oric
+Thomson MO5
+Tiger Game Com
+VTech CreatiVision
+VTech V Smile
+Xbox 360 ROMs & ISO
+ps2 playstation 2
+nintendo wii
+xbox 360
+nintendo 3ds
+Nintendo 3DS Rom [CIA]
+Nintendo Wii (WII)
+PS2 Playstation 2 ROMs
+Sharp X68000
+
+# Gamulator unsupported consoles
+Nintendo Wii
+CD-i
+C64 Preservation
+C64 Tapes
+Turbo Duo
+
+# Romspedia unsupported consoles
+PS2 ROMs
+3DS ROMs
+Wii ROMs
+GameCube ROMs
+PS3 ROMs
+Switch ROMs
+Xbox ROMs
+Wii U ROMs
+BBC Micro ROMs
+Tandy TRS-80 ROMs
+CD-i ROMs
+Robotron Z1013 ROMs
+Sega Pico ROMs
+Xbox 360 ROMs
+N-gage ROMs
+Atari Jaguar ROMs
+PS Vita ROMs
+PS 4 ROMs
+Acorn Archimedes ROMs
+SAM Coupé ROMs
+Apple II ROMs
+Tandy Color Computer ROMs
+Gamate ROMs
+Game com ROMs
+GX4000 ROMs
+Magnavox Odyssey 2 ROMs
+Acorn Atom ROMs
+Tatung Einstein ROMs
+Action Max ROMs
+Super Cassette Vision ROMs
+Apple II GS ROMs
+FM-7 ROMs
+Z-Machine ROMs
+ZX81 ROMs
+Bally Arcade ROMs
+Coleco Adam ROMs
+GP32 ROMs
+Dragon Data ROMs
+VTech CreatiVision ROMs
+Arcadia-2001 ROMs
+Amstrad PCW ROMs
+Sharp MZ-700 ROMs
+Sinclair QL ROMs
+Acorn Electron ROMs
+PV-2000 ROMs
+Mattel Aquarius ROMs
+Tangerine Oric ROMs
+Memotech MTX512 ROMs
+Interact Home Computer ROMs
+Camputers Lynx ROMs
+Varazdin Orao ROMs
+Super A'can ROMs
+Electronika BK ROMs
+Game Master ROMs
+SF-7000 ROMs
+Adventure Vision ROMs
+TI-99/4A ROMs
+Casio Loopy ROMs
+Exidy Sorcerer ROMs
+Kaypro II ROMs
+PV-1000 ROMs
+Apple I ROMs
+VTech Laser 200 ROMs
+ABC 800 ROMs
+RCA Studio II ROMs
+Timex Sinclair 1000 ROMs
+Commodore Max Machine ROMs
+Wang VS ROMs
+Victor Wondermega ROMs
+Galaksija ROMs

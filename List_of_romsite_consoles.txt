@@ -1,0 +1,227 @@
+=== HEXROM CONSOLES ===
+
+Acorn 8 bit
+Acorn Archimedes
+Acorn Electron
+Amiga 500
+Amstrad CPC (CPC)
+Amstrad GX4000
+Apple II (A2)
+Apple II GS (A2GS)
+Atari 2600 (A2600)
+Atari 5200 SuperSystem (A5200)
+Atari 7800 ProSystem (A7800)
+Atari 800 (A800)
+Atari Jaguar (AJAG)
+Atari Lynx (ALYNX)
+Atari ST (AST)
+Bally Pro Arcade Astrocade
+BBC Micro (BBCM)
+Camputers Lynx
+Capcom Play System (CPS)
+Capcom Play System 2 (CPS2)
+Casio Loopy
+Casio PV1000
+ColecoVision (CV)
+ColecoVision ADAM
+Commodore 64 (C64)
+Commodore Pet
+Commodore Plus4 C16
+Commodore VIC20
+Dragon Data Dragon
+Elektronika BK
+Emerson Arcadia 2001
+Epoch Super Cassette Vision
+Fairchild Channel F
+Funtech Super Acan
+Galaksija
+Game Gear (GG)
+Gameboy (GB)
+Gameboy Color (GBC)
+GameCube ROMs
+GamePark GP32
+GBA ROMs
+GCE Vectrex
+Hartung Game Master
+Intellivision
+Interact Family Computer
+Magnavox Odyssey 2
+MAME 037b11 (MAME)
+Mattel Aquarius
+Memotech MTX512
+Microsoft Xbox
+Miles Gordon Sam Coupe
+MSX Computer (MSXC)
+MSX-2 (MSX2)
+Neo Geo
+Neo Geo Pocket (NGP)
+Neo Geo Pocket Color (NPC)
+Nintendo (NES)
+Nintendo 3DS Rom [CIA]
+Nintendo 64
+Nintendo DS (NDS)
+Nintendo Famicom Disk System (NFDS)
+Nintendo Pokemon Mini
+Nintendo Virtual Boy (NVB)
+Nintendo Wii (WII)
+Nokia N Gage
+PC
+Pel Varazdin Orao
+Philips Videopac
+Playstation 1 (PSX) Roms
+Playstation Portable (PSP ISOs)
+PS Vita
+PS2 Playstation 2 ROMs
+RCA Studio II
+Robotron Z1013
+Sega 32X (S32X)
+Sega Dreamcast (DC)
+SEGA Genesis (SG)
+Sega Master System (SMS)
+Sega Pico (SP)
+Sega SG1000 (SG1000)
+Sega Super Control Station (SSCS)
+Sega Visual Memory System (SVMS)
+Sharp MZ 700
+Sharp X68000
+Sinclair ZX81
+SNES Super Nintendo
+SuFami Turbo (ST)
+Super Grafx (SGFX)
+Tandy Color Computer
+Tangerine Oric
+Thomson MO5
+Tiger Game Com
+TurboGrafx-16 (T16)
+VTech CreatiVision
+VTech V Smile
+Watara Supervision
+WonderSwan (WS)
+Xbox 360 ROMs & ISO
+ZX Spectrum (TAP)
+
+=== GAMULATOR CONSOLES ===
+
+PSP
+NDS
+GBA
+N64
+SNES
+PS2
+GameCube
+Mame
+PSX
+Nintendo Wii
+NES
+GBC
+PS3
+Megadrive
+Sega Dreamcast
+GB
+Neo Geo
+Sega Saturn
+Sega CD
+Sega NAOMI
+Atari 2600
+Sega Master System
+Sega Game Gear
+CPS 2
+CPS 1
+Dos
+ScummVM
+Famicom
+ZX Spectrum
+TurboGrafx16
+CPS 3
+Neo Geo Pocket
+Amiga
+Sega 32X
+X68000
+C64 Preservation
+Atari 5200
+Atari ST
+C64 Tapes
+Apple II
+Atari Lynx
+Virtual Boy
+Atari Jaguar
+Atari 7800
+3DO
+CD-i
+BBC Micro
+Turbo Duo
+PC-FX
+Wonderswan
+Wonderswan Color
+
+== Romspedia Consoles ==
+PS2 ROMs
+3DS ROMs
+Wii ROMs
+GameCube ROMs
+PS3 ROMs
+Switch ROMs
+Xbox ROMs
+Wii U ROMs
+BBC Micro ROMs
+Tandy TRS-80 ROMs
+CD-i ROMs
+Robotron Z1013 ROMs
+Sega Pico ROMs
+Xbox 360 ROMs
+N-gage ROMs
+Atari Jaguar ROMs
+PS Vita ROMs
+PS 4 ROMs
+Acorn Archimedes ROMs
+SAM Coupé ROMs
+Apple II ROMs
+Tandy Color Computer ROMs
+Gamate ROMs
+Game com ROMs
+GX4000 ROMs
+Magnavox Odyssey 2 ROMs
+Acorn Atom ROMs
+Tatung Einstein ROMs
+Action Max ROMs
+Super Cassette Vision ROMs
+Apple II GS ROMs
+FM-7 ROMs
+Z-Machine ROMs
+ZX81 ROMs
+Bally Arcade ROMs
+Coleco Adam ROMs
+GP32 ROMs
+Dragon Data ROMs
+VTech CreatiVision ROMs
+Arcadia-2001 ROMs
+Amstrad PCW ROMs
+Sharp MZ-700 ROMs
+Sinclair QL ROMs
+Acorn Electron ROMs
+PV-2000 ROMs
+Mattel Aquarius ROMs
+Tangerine Oric ROMs
+Memotech MTX512 ROMs
+Interact Home Computer ROMs
+Camputers Lynx ROMs
+Varazdin Orao ROMs
+Super A'can ROMs
+Electronika BK ROMs
+Game Master ROMs
+SF-7000 ROMs
+Adventure Vision ROMs
+TI-99/4A ROMs
+Casio Loopy ROMs
+Exidy Sorcerer ROMs
+Kaypro II ROMs
+PV-1000 ROMs
+Apple I ROMs
+VTech Laser 200 ROMs
+ABC 800 ROMs
+RCA Studio II ROMs
+Timex Sinclair 1000 ROMs
+Commodore Max Machine ROMs
+Wang VS ROMs
+Victor Wondermega ROMs
+Galaksija ROMs
