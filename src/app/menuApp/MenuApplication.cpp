@@ -105,7 +105,7 @@ void MenuApplication::handleConsolesLoaded(std::vector<ListItem>* consolesPtr) {
                 printf("[ConsoleMap] Selected '%s' has NO mapping\n", selectedConsoleName.c_str());
             }
             menuSystem->pushScreen(std::make_shared<LoadingScreen>("Loading games..."));
-            fetchGamesAsync(item.downloadUrl, 1, false);
+            fetchGamesAsync(item.downloadUrl, 1, false, selectedConsoleName);
         },
         nullptr,
         PaginationInfo()
@@ -132,12 +132,12 @@ void MenuApplication::handleGamesLoaded(GameListData* gameData) {
             listScreen2->setLoadingMore(true);
             // Get the current baseUrl from the ListScreen's pagination state, not the original gameData
             std::string currentBaseUrl = listScreen2->getCurrentPaginationBaseUrl();
-            fetchGamesAsync(currentBaseUrl, page, false);
+            fetchGamesAsync(currentBaseUrl, page, false, gameData->consoleName);
         } else {
             // For page 1 or when creating new ListScreen, use the original baseUrl
             std::string baseUrl = gameData->baseUrl;
             menuSystem->pushScreen(std::make_shared<LoadingScreen>("Loading page " + std::to_string(page)));
-            fetchGamesAsync(baseUrl, page, true);
+            fetchGamesAsync(baseUrl, page, true, gameData->consoleName);
         }
     };
     auto newListScreen = std::make_shared<ListScreen>(
@@ -202,8 +202,8 @@ void MenuApplication::fetchConsolesAsync() {
     }).detach();
 }
 
-void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen) {
-    std::thread([this, baseUrl, page]() {
+void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen, const std::string& consoleName) {
+    std::thread([this, baseUrl, page, consoleName]() {
         auto scraper = currentScraper();
         auto result = scraper ? scraper->fetchGames(baseUrl, page) : std::make_pair(std::vector<ListItem>(), PaginationInfo());
         GameListData* gameData = new GameListData();
@@ -211,6 +211,7 @@ void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool
         gameData->pagination = result.second;
         gameData->title = "Games";
         gameData->baseUrl = baseUrl;
+        gameData->consoleName = consoleName; // Preserve the console name
         SDL_Event event; SDL_zero(event);
         event.type = SDL_USEREVENT; event.user.code = EVENT_GAMES_LOADED; event.user.data1 = gameData;
         SDL_PushEvent(&event);

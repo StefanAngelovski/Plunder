@@ -20,4 +20,9 @@ public:
         const GamulatorFilterModal& filterModal,
         const std::string& search,
         int page = 1);
+    static std::pair<std::vector<ListItem>, PaginationInfo> filterGames(
+        const std::string& searchUrl, 
+        const std::string& consoleUrl, 
+        const std::string& search, 
+        int page = 1);
 };
