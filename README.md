@@ -53,7 +53,6 @@ It works on both the **stock Trimui OS** and **[CrossMix OS](https://github.com/
 - [ ] Improve modularity of scrapers & reduce repeated logic  
 - [ ] Replace regex-based parsing with a cleaner library  
 - [ ] Fix missing images due to `SDL2_image` lacking WebP support in CrossMix  
-- [ ] Smarter filtering → exclude unsupported/blacklisted consoles  
 
 ---
 
