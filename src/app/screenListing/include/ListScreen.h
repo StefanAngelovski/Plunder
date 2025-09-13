@@ -107,6 +107,7 @@ private:
     std::string gamulatorOriginalConsoleUrl; // Store original console URL for filtering
     std::string romspediaSearch;
     bool romspediaFilterActive = false;
+    std::string romspediaOriginalConsoleUrl; // Store original console URL for filtering
 
     // --- On-screen keyboard integration ---
     bool showOnscreenKeyboard = false;

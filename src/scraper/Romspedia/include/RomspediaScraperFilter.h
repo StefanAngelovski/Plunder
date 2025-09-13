@@ -15,4 +15,5 @@
 class RomspediaScraperFilter {
 public:
     static std::pair<std::vector<ListItem>, PaginationInfo> filterGames(const std::string& baseUrl, RomspediaFilterModal& modal, const std::string& search, int page = 1);
+    static std::pair<std::vector<ListItem>, PaginationInfo> filterGames(const std::string& searchUrl, const std::string& consoleUrl, const std::string& search, int page = 1);
 };

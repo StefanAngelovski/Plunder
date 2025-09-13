@@ -116,6 +116,7 @@ void ListScreen::setupRomspediaModal() {
     romspediaModal = std::make_unique<RomspediaFilterModal>();
     romspediaSearch.clear();
     romspediaFilterActive = false;
+    romspediaOriginalConsoleUrl = pagination.baseUrl; // Store original console URL for filtering
     romspediaModal->setOnFilter([this](const std::string& search, int region, int sort, int order, int genre){
         runSiteFilter(search, region, sort, order, genre);
     });
@@ -150,9 +151,42 @@ void ListScreen::runSiteFilter(const std::string& search, int region, int sort, 
         gamulatorModal->showModal(false);
     } else if (siteType == SiteType::Romspedia) {
         romspediaSearch = search;
-        romspediaFilterActive = !search.empty();
-        auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, *romspediaModal, romspediaSearch);
-        applyNewResult(result.first, result.second, true);
+        // Always use filter for Romspedia if we're in a specific console (baseUrl contains /roms/console-name)
+        // or if there's a search term
+        bool isConsoleSpecific = pagination.baseUrl.find("/roms/") != std::string::npos && 
+                                pagination.baseUrl.find("romspedia.com/roms") != std::string::npos &&
+                                pagination.baseUrl != "https://www.romspedia.com/roms";
+        romspediaFilterActive = !search.empty() || isConsoleSpecific;
+        
+        if (!search.empty() && isConsoleSpecific) {
+            // Use console-specific filtering
+            std::string searchUrl = "https://www.romspedia.com/search?search_term_string=";
+            auto urlEncode = [](const std::string& value) -> std::string {
+                std::ostringstream escaped;
+                escaped.fill('0');
+                escaped << std::hex;
+                for (char c : value) {
+                    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
+                        escaped << c;
+                    } else if (c == ' ') {
+                        escaped << '+';
+                    } else {
+                        escaped << '%' << std::uppercase << std::setw(2) << int((unsigned char)c) << std::nouppercase;
+                    }
+                }
+                return escaped.str();
+            };
+            searchUrl += urlEncode(search);
+            
+            // Use the original console URL for filtering, not the current pagination.baseUrl
+            std::string filterBaseUrl = romspediaOriginalConsoleUrl.empty() ? pagination.baseUrl : romspediaOriginalConsoleUrl;
+            auto result = RomspediaScraperFilter::filterGames(searchUrl, filterBaseUrl, romspediaSearch, 1);
+            applyNewResult(result.first, result.second, true);
+        } else {
+            // Use the original filter function for non-console specific searches
+            auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, *romspediaModal, romspediaSearch);
+            applyNewResult(result.first, result.second, true);
+        }
         romspediaModal->showModal(false);
     } else {
         auto result = HexromScraperFilter::filterGames(pagination.baseUrl, *hexromModal, search, region, sort, order, genre);
@@ -173,15 +207,25 @@ void ListScreen::runSitePaginate(int page) {
             applyNewResult(result.first, result.second, page == 1);
         }
     } else if (siteType == SiteType::Romspedia) {
-        std::cout << "*** ROMSPEDIA PAGINATION DEBUG *** filterActive=" << romspediaFilterActive << ", search='" << romspediaSearch << "'" << std::endl;
         // Check if we have a search URL in pagination.baseUrl (this means we're in search mode)
         bool isSearchUrl = pagination.baseUrl.find("search?search_term_string=") != std::string::npos;
         if (romspediaFilterActive || isSearchUrl) {
-            std::cout << "*** USING SEARCH FILTER *** (filterActive=" << romspediaFilterActive << ", isSearchUrl=" << isSearchUrl << ")" << std::endl;
-            auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, *romspediaModal, romspediaSearch, page);
-            applyNewResult(result.first, result.second, page == 1);
+            // Check if we're filtering within a specific console
+            bool isConsoleSpecific = !romspediaOriginalConsoleUrl.empty() && 
+                                   romspediaOriginalConsoleUrl.find("/roms/") != std::string::npos && 
+                                   romspediaOriginalConsoleUrl.find("romspedia.com/roms") != std::string::npos &&
+                                   romspediaOriginalConsoleUrl != "https://www.romspedia.com/roms";
+            
+            if (isConsoleSpecific && !romspediaSearch.empty()) {
+                // Use console-specific filtering with the original console URL
+                auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, romspediaOriginalConsoleUrl, romspediaSearch, page);
+                applyNewResult(result.first, result.second, page == 1);
+            } else {
+                // Use regular search filtering
+                auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, *romspediaModal, romspediaSearch, page);
+                applyNewResult(result.first, result.second, page == 1);
+            }
         } else {
-            std::cout << "*** USING REGULAR FETCH *** pagination.baseUrl=" << pagination.baseUrl << std::endl;
             RomspediaScraper s; auto result = s.fetchGames(pagination.baseUrl, page);
             applyNewResult(result.first, result.second, page == 1);
         }
