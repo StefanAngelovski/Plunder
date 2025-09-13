@@ -122,15 +122,15 @@ static std::set<std::string> loadRomspediaBlacklist() {
     if (file.is_open()) {
         std::string line;
         while (getline(file, line)) {
-            if (line.find("[Romspedia]") != std::string::npos) {
+            if (line.find("# Romspedia unsupported consoles") != std::string::npos) {
                 inRomspediaSection = true;
                 continue;
             }
-            if (line.find("[") != std::string::npos && line.find("]") != std::string::npos) {
+            if (line.find("# ") == 0 && line.find("Romspedia") == std::string::npos) {
                 inRomspediaSection = false;
                 continue;
             }
-            if (inRomspediaSection && !line.empty()) {
+            if (inRomspediaSection && !line.empty() && line[0] != '#') {
                 std::string normalized = normalizeConsoleName(line);
                 blacklist.insert(normalized);
             }
@@ -261,7 +261,8 @@ std::vector<ListItem> RomspediaScraper::fetchConsoles() {
             static std::set<std::string> blacklist = loadRomspediaBlacklist();
             // Map console name to folder (replace with your actual mapping function)
             std::string folder = getFolderForScrapedConsole(name); // <-- ensure this function exists and works
-            if (blacklist.find(name) == blacklist.end()) {
+            std::string normalizedName = normalizeConsoleName(name);
+            if (blacklist.find(normalizedName) == blacklist.end()) {
                 result.push_back(ListItem{name, img, url});
             }
         }
