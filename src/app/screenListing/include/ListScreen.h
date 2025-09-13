@@ -104,6 +104,7 @@ private:
     // Shared filter state (Gamulator uses only search; Hexrom uses indices in its modal already)
     std::string gamulatorSearch;
     bool gamulatorFilterActive = false;
+    std::string gamulatorOriginalConsoleUrl; // Store original console URL for filtering
     std::string romspediaSearch;
     bool romspediaFilterActive = false;
 

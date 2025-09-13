@@ -89,7 +89,15 @@ ListScreen::~ListScreen() {
 void ListScreen::setupGamulatorModal() {
     gamulatorModal = std::make_unique<GamulatorFilterModal>();
     gamulatorSearch.clear();
-    gamulatorFilterActive = false;
+    // Set initial filter state - always active if we're in a specific console
+    bool isConsoleSpecific = pagination.baseUrl.find("/roms/") != std::string::npos && 
+                            pagination.baseUrl.find("gamulator.com/roms") != std::string::npos &&
+                            pagination.baseUrl != "https://www.gamulator.com/roms";
+    gamulatorFilterActive = isConsoleSpecific;
+    // Store the original console URL for filtering
+    if (isConsoleSpecific) {
+        gamulatorOriginalConsoleUrl = pagination.baseUrl;
+    }
     gamulatorModal->setOnFilter([this](const std::string& search, int region, int sort, int order, int genre){
         (void)region; (void)sort; (void)order; (void)genre;
         runSiteFilter(search, region, sort, order, genre);
@@ -129,8 +137,15 @@ void ListScreen::applyNewResult(const std::vector<ListItem>& newItems, const Pag
 void ListScreen::runSiteFilter(const std::string& search, int region, int sort, int order, int genre) {
     if (siteType == SiteType::Gamulator) {
         gamulatorSearch = search;
-        gamulatorFilterActive = !search.empty();
-        auto result = GamulatorScraperFilter::filterGames(pagination.baseUrl, *gamulatorModal, gamulatorSearch, 1);
+        // Always use filter for Gamulator if we're in a specific console (baseUrl contains /roms/console-name)
+        // or if there's a search term
+        bool isConsoleSpecific = pagination.baseUrl.find("/roms/") != std::string::npos && 
+                                pagination.baseUrl.find("gamulator.com/roms") != std::string::npos &&
+                                pagination.baseUrl != "https://www.gamulator.com/roms";
+        gamulatorFilterActive = !search.empty() || isConsoleSpecific;
+        // Use the original console URL for filtering, not the current pagination.baseUrl
+        std::string filterBaseUrl = gamulatorOriginalConsoleUrl.empty() ? pagination.baseUrl : gamulatorOriginalConsoleUrl;
+        auto result = GamulatorScraperFilter::filterGames(filterBaseUrl, *gamulatorModal, gamulatorSearch, 1);
         applyNewResult(result.first, result.second, true);
         gamulatorModal->showModal(false);
     } else if (siteType == SiteType::Romspedia) {
@@ -147,11 +162,11 @@ void ListScreen::runSiteFilter(const std::string& search, int region, int sort, 
 }
 
 void ListScreen::runSitePaginate(int page) {
-    std::cout << "!!! PAGINATION FUNCTION ENTRY !!! page=" << page << std::endl;
-    std::cout << "*** RUNSITE PAGINATE CALLED *** page=" << page << ", siteType=" << (int)siteType << std::endl;
     if (siteType == SiteType::Gamulator) {
         if (gamulatorFilterActive) {
-            auto result = GamulatorScraperFilter::filterGames(pagination.baseUrl, *gamulatorModal, gamulatorSearch, page);
+            // Use the original console URL for filtering, not the current pagination.baseUrl
+            std::string filterBaseUrl = gamulatorOriginalConsoleUrl.empty() ? pagination.baseUrl : gamulatorOriginalConsoleUrl;
+            auto result = GamulatorScraperFilter::filterGames(filterBaseUrl, *gamulatorModal, gamulatorSearch, page);
             applyNewResult(result.first, result.second, page == 1);
         } else {
             GamulatorScraper s; auto result = s.fetchGames(pagination.baseUrl, page);

@@ -59,18 +59,18 @@ std::pair<std::vector<ListItem>, PaginationInfo> GamulatorScraper::fetchGames(co
     PaginationInfo pagination;
     pagination.baseUrl = consoleUrl;
     std::string url = consoleUrl;
-    printf("[GamulatorScraper::fetchGames] page=%d, baseUrl=%s\n", page, consoleUrl.c_str());
     if (page > 1) {
-        // Append ?currentpage=2 etc. if not present
-        if (url.find('?') == std::string::npos)
-            url += "?currentpage=" + std::to_string(page);
-        else
-            url += "&currentpage=" + std::to_string(page);
+        // Only append currentpage if it's not already in the URL
+        if (url.find("currentpage=") == std::string::npos) {
+            // Append ?currentpage=2 etc. if not present
+            if (url.find('?') == std::string::npos)
+                url += "?currentpage=" + std::to_string(page);
+            else
+                url += "&currentpage=" + std::to_string(page);
+        }
     }
-    printf("[GamulatorScraper::fetchGames] Final URL: %s\n", url.c_str());
     std::string html = HttpUtils::fetchWebContent(url);
     if (html.empty()) {
-        printf("[GamulatorScraper::fetchGames] Empty HTML for URL: %s\n", url.c_str());
         return {games, pagination};
     }
 
@@ -88,18 +88,26 @@ std::pair<std::vector<ListItem>, PaginationInfo> GamulatorScraper::fetchGames(co
         std::string tagsBlock = (*it)[7].str();
         if (gameUrl.find("http") != 0) gameUrl = "https://www.gamulator.com" + gameUrl;
         if (img.find("http") != 0) img = "https://www.gamulator.com" + img;
-        // Extract genres from tagsBlock (all <a ... rel="tag">GENRE</a> except emulator)
+        
+        // Extract console tag from tagsBlock (the emulator button)
+        std::string consoleTag;
+        std::regex consoleRe(R"(<a[^>]+class=\"btn btn-info1[^>]+emulator\"[^>]*>([^<]+)<\/a>)", std::regex::icase);
+        std::smatch consoleMatch;
+        if (std::regex_search(tagsBlock, consoleMatch, consoleRe)) {
+            consoleTag = StringUtils::cleanHtmlText(consoleMatch[1].str());
+        }
+        
+        // Extract genres from tagsBlock (all <a ... rel="tag">GENRE</a> that are NOT emulator buttons)
         std::string genre;
-        std::regex tagRe(R"(<a[^>]+rel=\"tag\"[^>]*>([^<]+)<\/a>)", std::regex::icase);
+        std::regex tagRe(R"(<a[^>]+class=\"btn btn-info btn-xs\"[^>]+rel=\"tag\"[^>]*>([^<]+)<\/a>)", std::regex::icase);
         auto tagBegin = std::sregex_iterator(tagsBlock.begin(), tagsBlock.end(), tagRe);
         auto tagEnd = std::sregex_iterator();
         for (auto tagIt = tagBegin; tagIt != tagEnd; ++tagIt) {
             std::string tag = StringUtils::cleanHtmlText((*tagIt)[1].str());
-            if (tag != "PSP") {
-                if (!genre.empty()) genre += ", ";
-                genre += tag;
-            }
+            if (!genre.empty()) genre += ", ";
+            genre += tag;
         }
+        
         ListItem item;
         item.label = name;
         item.imagePath = img;
@@ -116,20 +124,16 @@ std::pair<std::vector<ListItem>, PaginationInfo> GamulatorScraper::fetchGames(co
     if (std::regex_search(html, pageMatch, pageRe)) {
         pagination.currentPage = std::stoi(pageMatch[1].str());
         pagination.totalPages = std::stoi(pageMatch[2].str());
-        printf("[GamulatorScraper::fetchGames] Pagination found: currentPage=%d, totalPages=%d\n", pagination.currentPage, pagination.totalPages);
     } else {
         // Fallback: if this is a search (URL contains /search? or search_term_string=), set totalPages high so scrolling always tries to load more
         if (consoleUrl.find("/search?") != std::string::npos || consoleUrl.find("search_term_string=") != std::string::npos) {
             pagination.currentPage = page;
             pagination.totalPages = 999; // Arbitrary high value, will stop when no more results
-            printf("[GamulatorScraper::fetchGames] Fallback pagination for search: currentPage=%d, totalPages=%d\n", pagination.currentPage, pagination.totalPages);
         } else {
             pagination.currentPage = page;
             pagination.totalPages = page;
-            printf("[GamulatorScraper::fetchGames] Fallback pagination: currentPage=%d, totalPages=%d\n", pagination.currentPage, pagination.totalPages);
         }
     }
-    printf("[GamulatorScraper::fetchGames] Returning %zu games\n", games.size());
     return {games, pagination};
 }
 
