@@ -131,7 +131,13 @@ void ListScreen::applyNewResult(const std::vector<ListItem>& newItems, const Pag
         textures.clear();
         textures.resize(items.size(), nullptr);
     } else {
-        appendItems(newItems, newPagination);
+        // When appending (pagination), check if we got empty results
+        if (newItems.empty() && newPagination.currentPage > 1) {
+            // No more results found - adjust totalPages to prevent further pagination attempts
+            pagination.totalPages = pagination.currentPage - 1;
+        } else {
+            appendItems(newItems, newPagination);
+        }
     }
 }
 
