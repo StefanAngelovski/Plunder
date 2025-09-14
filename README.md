@@ -11,7 +11,7 @@ It works on both the **stock Trimui OS** and **[CrossMix OS](https://github.com/
 
 1. Download the latest release from [Releases](https://github.com/StefanAngelovski/Plunder/releases).  
 2. Unzip the archive.  
-3. Place the **Plunder** folder into:  
+3. Place the **Plunder** folder into: /SDCARD/Apps/ 
 
 
 4. Launch it from your Trimui Smart Pro app menu.  
