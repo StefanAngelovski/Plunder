@@ -294,12 +294,6 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
     if (showDownloadPopup) {
         // Only suppress the modal for HexRom when showing options, not for confirmation
         bool isHexrom = !details.downloadUrl.empty() && details.downloadUrl.find("hexrom.com") != std::string::npos;
-        if (isHexrom && !downloadPopupMessage.empty() && (downloadPopupMessage.find("downloaded to") != std::string::npos || downloadPopupMessage.find("extracted to") != std::string::npos || downloadPopupMessage.find("failed") != std::string::npos || downloadPopupMessage.find("not supported") != std::string::npos)) {
-            // Allow confirmation popup for HexRom
-        } else if (isHexrom) {
-            showDownloadPopup = false; // Force close if it was set
-            return;
-        }
         int maxVisible = (600 - 180) / 44;
         int total = downloadOptions.size();
         int scrollOffset = downloadPopupScrollOffset;
