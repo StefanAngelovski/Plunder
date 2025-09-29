@@ -326,6 +326,27 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         SDL_SetRenderDrawColor(renderer, 80, 200, 255, 255);
         SDL_Rect barFill = {barX, barY, int(barW * progress), barH};
         SDL_RenderFillRect(renderer, &barFill);
+
+        // --- Unzipping message logic ---
+        // Show "Game is being unzipped" above the loading bar if unzipping is in progress
+        static bool wasUnzipping = false;
+        static Uint32 unzipMsgTimer = 0;
+        bool showUnzipMsg = false;
+        // Heuristic: if downloadProgressText contains "Unzipping...", show the message
+        if (downloadProgressText.find("Unzipping...") != std::string::npos) {
+            showUnzipMsg = true;
+            wasUnzipping = true;
+            unzipMsgTimer = SDL_GetTicks();
+        } else if (wasUnzipping && SDL_GetTicks() - unzipMsgTimer < 2000) {
+            // Keep message for 2 seconds after unzipping
+            showUnzipMsg = true;
+        } else {
+            wasUnzipping = false;
+        }
+        if (showUnzipMsg) {
+            UiUtils::RenderText(renderer, font, "Game is being unzipped", barX, barY - 72, UiUtils::Color(255,255,180));
+        }
+
         UiUtils::RenderText(renderer, font, "Downloading...", barX, barY - 36, UiUtils::Color(255,255,255));
         UiUtils::RenderText(renderer, font, downloadProgressText, barX, barY + barH + 8, UiUtils::Color(200,255,200));
         // Render Cancel button
@@ -337,7 +358,7 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         SDL_RenderFillRect(renderer, &cancelRect);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderDrawRect(renderer, &cancelRect);
-    UiUtils::RenderTextCenteredInBox(renderer, font, "Cancel", cancelRect, UiUtils::Color(255,255,255));
+        UiUtils::RenderTextCenteredInBox(renderer, font, "Cancel", cancelRect, UiUtils::Color(255,255,255));
         // Draw focus/hover effect
         SDL_Color focusColor = {255, 255, 0, 255};
         float borderAnim = 1.0f;
@@ -713,6 +734,8 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
                                 bool have7z = cmdExists("7z");
                                 int ret = -1;
                                 if (haveUnzip) {
+                                    // Show unzip message in UI
+                                    downloadProgressText = "Unzipping...";
                                     ret = system((std::string("unzip -o \"") + downloadOutPath + "\" -d \"" + tmpDir + "\" >/dev/null 2>&1").c_str());
                                 }
                                 if (ret != 0 && have7z) {
