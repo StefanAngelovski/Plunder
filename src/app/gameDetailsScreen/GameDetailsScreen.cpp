@@ -714,7 +714,7 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
                             if (finalFileName.size() > 4) {
                                 std::string ext = finalFileName.substr(finalFileName.size()-4);
                                 std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                                if (ext == ".zip") isZip = true;
+                                if (ext == ".zip" || ext == ".rar") isZip = true;
                             }
                             bool unzip = isZip && shouldUnzipForFolder(details.mappedFolder);
                             printf("[Download] Post-processing: file=%s isZip=%d unzip=%d folder=%s\n", finalFileName.c_str(), (int)isZip, (int)unzip, details.mappedFolder.c_str());

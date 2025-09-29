@@ -21,22 +21,22 @@ std::string ExtractRomspediaDirectDownloadLink(const std::string& detailsPageUrl
         printf("[RomspediaDownload] Empty HTML for: %s\n", downloadPageUrl.c_str());
         return "";
     }
-    // Look for <a href=\"...zip\" ...>
-    std::regex zipRe(R"(<a[^>]+href=[\"']([^\"']+\.zip)[\"'])", std::regex::icase);
+    // Look for <a href=\"...zip|rar\" ...>
+    std::regex archiveRe(R"(<a[^>]+href=[\"']([^\"']+\.(zip|rar))[\"'])", std::regex::icase);
     std::smatch match;
-    if (std::regex_search(html, match, zipRe) && match.size() > 1) {
+    if (std::regex_search(html, match, archiveRe) && match.size() > 1) {
         std::string link = match[1].str();
-        printf("[RomspediaDownload] Direct zip anchor match: %s\n", link.c_str());
+        printf("[RomspediaDownload] Direct archive anchor match: %s\n", link.c_str());
         return link;
     }
-    // Fallback: look for any .zip link
-    std::regex urlZipRe(R"(https?://[^\"']+\.zip)", std::regex::icase);
-    if (std::regex_search(html, match, urlZipRe) && match.size() > 0) {
+    // Fallback: look for any .zip or .rar link
+    std::regex urlArchiveRe(R"(https?://[^\"']+\.(zip|rar))", std::regex::icase);
+    if (std::regex_search(html, match, urlArchiveRe) && match.size() > 0) {
         std::string link = match[0].str();
-        printf("[RomspediaDownload] Fallback absolute zip match: %s\n", link.c_str());
+        printf("[RomspediaDownload] Fallback absolute archive match: %s\n", link.c_str());
         return link;
     }
-    printf("[RomspediaDownload] No zip link found on page: %s\n", downloadPageUrl.c_str());
+    printf("[RomspediaDownload] No zip/rar link found on page: %s\n", downloadPageUrl.c_str());
     return "";
 }
 
