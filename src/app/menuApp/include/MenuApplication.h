@@ -69,7 +69,7 @@ private:
     void handlePatchNotesLoaded(std::vector<std::string>* linesPtr);
     void updateCurrentScreenAnimations(bool& needsRedraw);
     void fetchConsolesAsync();
-    void fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen, const std::string& consoleName = "");
+    void fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen, const std::string& consoleName);
     void fetchGameDetailsAsync(const ListItem& game, SDL_Texture* iconTexture, const std::string& consoleName);
     static void fetchPatchNotesAsync(std::shared_ptr<PatchNotesScreen> patchScreen);
     void showNoInternetAndExit();
