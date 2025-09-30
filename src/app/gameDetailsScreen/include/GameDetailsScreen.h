@@ -39,14 +39,10 @@
 #include "../../../utils/include/HttpUtils.h"
 #include "../../../utils/include/StringUtils.h"
 #include "../../ControllerButtons.h"
+#include "DownloadManager.h"
 
 /// ========================================================== ///
 class MenuSystem;
-
-struct DownloadOption {
-    std::string label;
-    std::string url;
-};
 
 class GameDetailsScreen : public Screen {
     public:
@@ -65,6 +61,7 @@ class GameDetailsScreen : public Screen {
         Uint32 buttonFocusStart = 0; // For animation timing
         float buttonBorderAnim = 0.0f; // 0.0 = corners, 1.0 = full border
         Uint32 lastAnimTime = 0; // For smooth animation
+        
         // Download popup state
         bool showDownloadPopup = false;
         std::vector<DownloadOption> downloadOptions;
@@ -75,20 +72,14 @@ class GameDetailsScreen : public Screen {
         int downloadPopupMaxVisible = 0;
         int downloadPopupLastAxisValue = 0;
         Uint32 downloadPopupLastAxisTime = 0;
-        // Download progress state
-        long downloadCurrentBytes = 0;
-        long downloadTotalBytes = 0;
-        bool downloadInProgress = false;
-        bool downloadCancelRequested = false;
-        std::string downloadProgressText;
-    pid_t downloadPid = -1; // process id of curl
-        // 0 = progress bar, 1 = cancel button
-        int downloadButtonFocus = 0;
-        // Store the current download output file path for cancel logic
-        std::string downloadOutPath;
+        
+        // Audio
         Mix_Chunk* cancelSound = nullptr;
         Mix_Music* cancelMusic = nullptr;
         bool mixerInitialized = false;
+        
+        // Download manager
+        DownloadManager downloadManager;
     public:
         void setAboutScrollOffset(int offset) { aboutScrollOffset = offset; }
         int getAboutScrollOffset() const { return aboutScrollOffset; }

@@ -302,7 +302,7 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         RenderDownloadPopup(renderer, font, downloadOptions, selectedDownloadOption, scrollOffset, downloadPopupMessage);
     }
     // Draw Downloading... progress bar if in progress
-    if (downloadInProgress) {
+    if (downloadManager.isDownloading()) {
         int barW = 600, barH = 32;
         int barX = 340, barY = 650;
         SDL_Rect barBg = {barX, barY, barW, barH};
@@ -310,8 +310,8 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         SDL_RenderFillRect(renderer, &barBg);
         float progress = 0.0f;
         static float indet = 0.0f;
-        if (downloadTotalBytes > 0) {
-            progress = std::min(1.0f, float(downloadCurrentBytes) / float(downloadTotalBytes));
+        if (downloadManager.getTotalBytes() > 0) {
+            progress = std::min(1.0f, float(downloadManager.getCurrentBytes()) / float(downloadManager.getTotalBytes()));
         } else {
             // Indeterminate: animate bar
             indet += 0.02f; if (indet > 1.0f) indet = 0.0f;
@@ -327,7 +327,8 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         static Uint32 unzipMsgTimer = 0;
         bool showUnzipMsg = false;
         // Heuristic: if downloadProgressText contains "Unzipping...", show the message
-        if (downloadProgressText.find("Unzipping...") != std::string::npos) {
+        std::string progressText = downloadManager.getProgressText();
+        if (progressText.find("Unzipping...") != std::string::npos) {
             showUnzipMsg = true;
             wasUnzipping = true;
             unzipMsgTimer = SDL_GetTicks();
@@ -342,7 +343,7 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         }
 
         UiUtils::RenderText(renderer, font, "Downloading...", barX, barY - 36, UiUtils::Color(255,255,255));
-        UiUtils::RenderText(renderer, font, downloadProgressText, barX, barY + barH + 8, UiUtils::Color(200,255,200));
+        UiUtils::RenderText(renderer, font, progressText, barX, barY + barH + 8, UiUtils::Color(200,255,200));
         // Render Cancel button
         int cancelW = 160, cancelH = 44;
         int cancelX = barX + barW + 24;
@@ -356,6 +357,7 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         // Draw focus/hover effect
         SDL_Color focusColor = {255, 255, 0, 255};
         float borderAnim = 1.0f;
+        int downloadButtonFocus = downloadManager.getButtonFocus();
         if (downloadButtonFocus == 0) {
             SDL_Rect focusRect = {barX-4, barY-4, barW+8, barH+8};
             DrawAnimatedLBorder(renderer, focusRect, borderAnim, focusColor);
@@ -364,129 +366,38 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
             DrawAnimatedLBorder(renderer, focusRect, borderAnim, focusColor);
         }
     }
-
-    // --- Debug overlay (draw last so it appears on top) ---
 }
 
-// --- Scraping logic (fixed for C++14) ---
-static std::vector<DownloadOption> ScrapeDownloadOptions(const std::string& pageUrl) {
-    std::vector<DownloadOption> result;
-    std::string html = HttpUtils::fetchWebContent(pageUrl);
-    if (html.empty()) return result;
-    // Find the main table with download links
-    std::smatch tableMatch;
-    std::regex tableRe(R"(<table[^>]*>([\s\S]*?)</table>)", std::regex::icase);
-    if (std::regex_search(html, tableMatch, tableRe)) {
-        std::string table = tableMatch[1].str();
-        std::regex rowRe(R"(<tr>([\s\S]*?)</tr>)", std::regex::icase);
-        auto rowsBegin = std::sregex_iterator(table.begin(), table.end(), rowRe);
-        auto rowsEnd = std::sregex_iterator();
-        for (auto it = rowsBegin; it != rowsEnd; ++it) {
-            std::string row = (*it)[1].str();
-            std::smatch linkMatch;
-            std::regex linkRe(R"(<a[^>]+href=["']([^"']+/download/[^"']+)["'][^>]*>([\s\S]*?)</a>)", std::regex::icase);
-            if (std::regex_search(row, linkMatch, linkRe)) {
-                std::string url = linkMatch[1].str();
-                // Only prepend romsfun.com for Romsfun, not Hexrom
-                if (url.find("http") != 0 && url.find("/download/") != std::string::npos) {
-                    url = "https://hexrom.com" + url;
-                }
-                std::string label = StringUtils::cleanHtmlText(linkMatch[2].str());
-                result.push_back({label, url});
-            }
-        }
-    }
-    return result;
-}
 
-static std::string ScrapeFinalDownloadLink(const std::string& versionUrl) {
-    std::string html = HttpUtils::fetchWebContent(versionUrl);
-    if (html.empty()) return "";
-    std::smatch linkMatch;
-    std::regex linkRe(R"(<a[^>]+id=["']download["'][^>]+href=["']([^"']+)["'])", std::regex::icase);
-    if (std::regex_search(html, linkMatch, linkRe)) {
-        return linkMatch[1].str();
-    }
-    return "";
-}
 
-// Helper: Download file from URL to disk (simple blocking version)
-static void DownloadFileToDisk(const std::string& url, const std::string& outPath) {
-    char cwd[PATH_MAX];
-    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-    } else {
-    }
-    std::string data = HttpUtils::fetchWebContent(url);
-    if (!data.empty()) {
-        std::ofstream out(outPath, std::ios::binary);
-        out.write(data.data(), data.size());
-        out.close();
-    } else {
-    }
-}
 
-// Helper: Get remote file size using curl HEAD
-static long GetRemoteFileSize(const std::string& url) {
-    std::string command = "curl --cacert /etc/ssl/certs/ca-certificates.crt -sI \"" + url + "\"";
-    FILE* pipe = popen(command.c_str(), "r");
-    if (!pipe) return -1;
-    char buffer[256];
-    long size = -1;
-    while (fgets(buffer, sizeof(buffer), pipe)) {
-        std::string line(buffer);
-        // Make case-insensitive and trim whitespace
-        std::string lowerLine = line;
-        std::transform(lowerLine.begin(), lowerLine.end(), lowerLine.begin(), ::tolower);
-        size_t pos = lowerLine.find("content-length:");
-        if (pos != std::string::npos) {
-            std::string val = line.substr(pos + 15);
-            val.erase(0, val.find_first_not_of(" \t\r\n"));
-            val.erase(val.find_last_not_of(" \t\r\n") + 1);
-            try {
-                size = std::stol(val);
-            } catch (...) {
-                size = -1;
-            }
-            break;
-        }
-    }
-    pclose(pipe);
-    return size;
-}
 
+// ================================ INPUT =======================================
 void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
     // --- Download/cancel button navigation always takes priority when downloading ---
-    if (downloadInProgress) {
+    if (downloadManager.isDownloading()) {
         if (e.type == SDL_KEYDOWN || e.type == SDL_CONTROLLERBUTTONDOWN) {
             // Left/right to move focus
             if ((e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_LEFT) ||
                 (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_DPAD_LEFT)) {
-                if (downloadButtonFocus > 0) downloadButtonFocus--;
+                int focus = downloadManager.getButtonFocus();
+                if (focus > 0) downloadManager.setButtonFocus(focus - 1);
                 return;
             }
             if ((e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_RIGHT) ||
                 (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_DPAD_RIGHT)) {
-                if (downloadButtonFocus < 1) downloadButtonFocus++;
+                int focus = downloadManager.getButtonFocus();
+                if (focus < 1) downloadManager.setButtonFocus(focus + 1);
                 return;
             }
             // A or B or X on Cancel
-            if (downloadButtonFocus == 1 &&
+            if (downloadManager.getButtonFocus() == 1 &&
                 ((e.type == SDL_KEYDOWN && (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_SPACE || e.key.keysym.sym == SDLK_x)) ||
                  (e.type == SDL_CONTROLLERBUTTONDOWN && (e.cbutton.button == BUTTON_A || e.cbutton.button == BUTTON_B || e.cbutton.button == BUTTON_X)))) {
                 if (cancelSound) {
                     Mix_PlayChannel(-1, cancelSound, 0);
                 }
-                downloadCancelRequested = true;
-                downloadInProgress = false;
-                if (downloadPid > 0) { kill(downloadPid, SIGTERM); downloadPid = -1; }
-                downloadProgressText = "Download canceled.";
-                downloadTotalBytes = 0;
-                downloadCurrentBytes = 0;
-                downloadButtonFocus = 0;
-                // --- Ensure partial file is deleted immediately ---
-                if (!downloadOutPath.empty()) {
-                    std::remove(downloadOutPath.c_str());
-                }
+                downloadManager.cancelDownload();
                 return;
             }
         }
@@ -513,7 +424,7 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
                     downloadPopupMessage = "Fetching download link...";
                     std::string versionUrl = downloadOptions[selectedDownloadOption].url;
                     std::thread([this, versionUrl]() {
-                        std::string finalLink = ScrapeFinalDownloadLink(versionUrl);
+                        std::string finalLink = DownloadManager::scrapeFinalDownloadLink(versionUrl);
                         downloadPopupMessage = "Download link: " + finalLink;
                     }).detach();
                 }
@@ -602,7 +513,7 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
         }
         // Activate download button (A = select)
         if (buttonFocused && e.cbutton.button == BUTTON_A) {
-            if (downloadInProgress) return; // Guard
+            if (downloadManager.isDownloading()) return; // Guard
             const std::string url = details.downloadUrl; // Should already be a direct link supplied by scraper
             if (url.empty()) {
                 showDownloadPopup = true;
@@ -622,178 +533,18 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
             size_t q = filename.find('?'); if (q != std::string::npos) filename = filename.substr(0, q);
             if (filename.empty()) filename = "download.bin";
             mkdir("downloads", 0755);
-            downloadOutPath = std::string("downloads/") + filename;
-            downloadProgressText = "Starting...";
-            downloadInProgress = true;
-            downloadCancelRequested = false;
-            downloadCurrentBytes = 0;
-            downloadTotalBytes = 0;
-            std::thread([this, url]() {
-                // Try to discover size (HEAD)
-                long size = GetRemoteFileSize(url);
-                if (size > 0) downloadTotalBytes = size;
-                std::string referer = url.find("gamulator.com") != std::string::npos ? "https://www.gamulator.com/" : "https://hexrom.com/";
-                auto humanSize = [](long bytes) {
-                    const char* units[] = {"B","KB","MB","GB","TB"};
-                    double v = (double)bytes;
-                    int unit = 0;
-                    while (v >= 1024.0 && unit < 4) { v /= 1024.0; ++unit; }
-                    char buf[64];
-                    if (v < 10.0) snprintf(buf, sizeof(buf), "%.2f %s", v, units[unit]);
-                    else if (v < 100.0) snprintf(buf, sizeof(buf), "%.1f %s", v, units[unit]);
-                    else snprintf(buf, sizeof(buf), "%.0f %s", v, units[unit]);
-                    return std::string(buf);
-                };
-                // Fork & exec curl so we can poll file size
-                pid_t pid = fork();
-                if (pid == 0) {
-                    // Child
-                    execlp("curl", "curl",
-                           "--globoff", "-L", "--retry", "2",
-                           "--cacert", "/etc/ssl/certs/ca-certificates.crt",
-                           "-A", "Mozilla/5.0 (X11; Linux x86_64)",
-                           "-e", referer.c_str(),
-                           "-o", downloadOutPath.c_str(),
-                           url.c_str(),
-                           (char*)nullptr);
-                    _exit(127);
-                } else if (pid < 0) {
-                    downloadProgressText = "Failed to fork.";
-                    downloadInProgress = false;
-                    return;
+            std::string downloadOutPath = std::string("downloads/") + filename;
+            
+            // Start download using DownloadManager
+            downloadManager.startDownload(url, downloadOutPath, details);
+            
+            // Setup callback to show completion popup
+            std::thread([this]() {
+                while (downloadManager.isDownloading()) {
+                    SDL_Delay(500); // Check every 500ms
                 }
-                downloadPid = pid;
-                // Parent: poll
-                while (true) {
-                    if (downloadCancelRequested) {
-                        kill(pid, SIGTERM);
-                    }
-                    int status = 0;
-                    pid_t r = waitpid(pid, &status, WNOHANG);
-                    struct stat st{};
-                    if (stat(downloadOutPath.c_str(), &st) == 0) {
-                        downloadCurrentBytes = st.st_size;
-                        if (downloadTotalBytes > 0) {
-                            double pct = downloadTotalBytes > 0 ? (double)downloadCurrentBytes / (double)downloadTotalBytes * 100.0 : 0.0;
-                            downloadProgressText = humanSize(downloadCurrentBytes) + " / " + humanSize(downloadTotalBytes) + " (" + std::to_string((int)std::round(pct)) + "%)";
-                        } else {
-                            downloadProgressText = humanSize(downloadCurrentBytes);
-                        }
-                    }
-                    if (r == pid) break; // finished
-                    if (downloadCancelRequested) {
-                        downloadProgressText = "Download canceled.";
-                        break;
-                    }
-                    SDL_Delay(200); // sleep a bit
-                }
-                // Finalize
-                if (downloadCancelRequested) {
-                    std::remove(downloadOutPath.c_str());
-                    if (downloadPid > 0) { kill(downloadPid, SIGTERM); }
-                    downloadInProgress = false;
-                    return;
-                }
-                struct stat stFinal{};
-                if (stat(downloadOutPath.c_str(), &stFinal) == 0 && stFinal.st_size > 0) {
-                    downloadCurrentBytes = stFinal.st_size;
-                    if (downloadTotalBytes == 0) downloadTotalBytes = stFinal.st_size;
-                    // Attempt relocate using persisted mappedFolder (if any)
-                    if (!details.mappedFolder.empty()) {
-                        std::vector<std::string> roots = {"/mnt/SDCARD/Roms","/mnt/SDCARD/ROMS","Roms","ROMS","../Roms","../ROMS"};
-                        std::string baseDir;
-                        struct stat stDir{};
-                        for (auto &r : roots) {
-                            std::string candidate = r + "/" + details.mappedFolder;
-                            if (stat(candidate.c_str(), &stDir) == 0 && S_ISDIR(stDir.st_mode)) { baseDir = candidate; break; }
-                        }
-                        if (!baseDir.empty()) {
-                            std::string finalFileName = downloadOutPath.substr(downloadOutPath.find_last_of('/')+1);
-                            std::string newPath = baseDir + "/" + finalFileName;
-                            bool isZip = false;
-                            if (finalFileName.size() > 4) {
-                                std::string ext = finalFileName.substr(finalFileName.size()-4);
-                                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                                if (ext == ".zip" || ext == ".rar") isZip = true;
-                            }
-                            bool unzip = isZip && shouldUnzipForFolder(details.mappedFolder);
-                            printf("[Download] Post-processing: file=%s isZip=%d unzip=%d folder=%s\n", finalFileName.c_str(), (int)isZip, (int)unzip, details.mappedFolder.c_str());
-                            if (unzip) {
-                                // Create temp extraction dir
-                                std::string tmpDir = baseDir + "/.__extract_tmp";
-                                mkdir(tmpDir.c_str(), 0755);
-                                // Use busybox/unzip if available; try unzip then 7z
-                                auto cmdExists = [](const char* c){ return system((std::string("command -v ") + c + " >/dev/null 2>&1").c_str()) == 0; };
-                                bool haveUnzip = cmdExists("unzip");
-                                bool have7z = cmdExists("7z");
-                                int ret = -1;
-                                if (haveUnzip) {
-                                    // Show unzip message in UI
-                                    downloadProgressText = "Unzipping...";
-                                    ret = system((std::string("unzip -o \"") + downloadOutPath + "\" -d \"" + tmpDir + "\" >/dev/null 2>&1").c_str());
-                                }
-                                if (ret != 0 && have7z) {
-                                    ret = system((std::string("7z x -y \"") + downloadOutPath + "\" -o\"" + tmpDir + "\" >/dev/null 2>&1").c_str());
-                                }
-                                if (ret != 0) {
-                                    printf("[Download] Extraction skipped/failed: unzip=%d 7z=%d ret=%d (keeping zip)\n", haveUnzip?1:0, have7z?1:0, ret);
-                                }
-                                if (ret == 0) {
-                                    // Move extracted files into baseDir
-                                    DIR* d = opendir(tmpDir.c_str());
-                                    if (d) {
-                                        struct dirent* de;
-                                        while ((de = readdir(d))) {
-                                            if (std::string(de->d_name) == "." || std::string(de->d_name) == "..") continue;
-                                            std::string from = tmpDir + "/" + de->d_name;
-                                            std::string to = baseDir + "/" + de->d_name;
-                                            rename(from.c_str(), to.c_str());
-                                        }
-                                        closedir(d);
-                                    }
-                                    // Delete original zip
-                                    std::remove(downloadOutPath.c_str());
-                                    // Remove temp dir
-                                    rmdir(tmpDir.c_str());
-                                    downloadProgressText = std::string("Extracted to ") + baseDir;
-                                    printf("[Download] Extracted contents to %s (removed zip)\n", baseDir.c_str());
-                                } else {
-                                    // Extraction failed -> attempt plain move of zip
-                                    if (rename(downloadOutPath.c_str(), newPath.c_str()) == 0) {
-                                        downloadOutPath = newPath;
-                                        downloadProgressText = std::string("Saved to ") + newPath + " (zip kept)";
-                                        printf("[Download] Extraction failed; moved zip to %s\n", newPath.c_str());
-                                    } else {
-                                        if (std::remove(downloadOutPath.c_str()) == 0) printf("[Download] Extraction+move failed; zip deleted %s\n", downloadOutPath.c_str());
-                                        downloadProgressText = "Download failed (extract+move).";
-                                    }
-                                }
-                            } else {
-                                // Just move the zip or non-zip file
-                                if (rename(downloadOutPath.c_str(), newPath.c_str()) == 0) {
-                                    downloadOutPath = newPath;
-                                    downloadProgressText = std::string("Saved to ") + newPath;
-                                    printf("[Download] Moved file to %s\n", newPath.c_str());
-                                } else {
-                                    if (std::remove(downloadOutPath.c_str()) == 0) printf("[Download] Move failed, file deleted: %s\n", downloadOutPath.c_str());
-                                    downloadProgressText = "Download failed (move error).";
-                                }
-                            }
-                        } else {
-                            if (std::remove(downloadOutPath.c_str()) == 0) printf("[Download] Console folder missing, file deleted: %s (mappedFolder=%s)\n", downloadOutPath.c_str(), details.mappedFolder.c_str());
-                            downloadProgressText = "Download failed (console folder missing).";
-                        }
-                    } else {
-                        // No mapping persisted -> delete per earlier rule
-                        if (std::remove(downloadOutPath.c_str()) == 0) printf("[Download] No mapping (persisted empty), file deleted: %s\n", downloadOutPath.c_str());
-                        downloadProgressText = "Download failed (no console mapping).";
-                    }
-                } else {
-                    downloadProgressText = "Download failed.";
-                }
-                downloadPopupMessage = downloadProgressText;
+                downloadPopupMessage = downloadManager.getProgressText();
                 showDownloadPopup = true;
-                downloadInProgress = false;
             }).detach();
             return;
         }
