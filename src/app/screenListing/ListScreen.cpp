@@ -102,7 +102,6 @@ void ListScreen::setupGamulatorModal() {
         (void)region; (void)sort; (void)order; (void)genre;
         runSiteFilter(search, region, sort, order, genre);
     });
-    onPageChange = [this](int page){ runSitePaginate(page); };
 }
 
 void ListScreen::setupHexromModal() {
