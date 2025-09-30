@@ -50,22 +50,42 @@ bool downloadAndExtractRomspediaZip(const std::string& downloadUrl, const std::s
     std::string basePath = "build/Plunder/roms/" + folder;
     // Ensure folder exists
     mkdir(basePath.c_str(), 0755);
-    std::string zipPath = basePath + "/" + romName + ".zip";
-    printf("[RomspediaDownload] Downloading to: %s\n", zipPath.c_str());
-    if (!HttpUtils::downloadFile(downloadUrl, zipPath)) {
+
+    // Detect file extension from downloadUrl
+    std::string ext = ".zip";
+    size_t dotPos = downloadUrl.find_last_of('.');
+    if (dotPos != std::string::npos) {
+        std::string urlExt = downloadUrl.substr(dotPos);
+        if (urlExt == ".rar" || urlExt == ".zip") ext = urlExt;
+    }
+    std::string archivePath = basePath + "/" + romName + ext;
+    printf("[RomspediaDownload] Downloading to: %s\n", archivePath.c_str());
+    if (!HttpUtils::downloadFile(downloadUrl, archivePath)) {
         printf("[RomspediaDownload] Download failed: %s\n", downloadUrl.c_str());
         return false;
     }
     if (shouldUnzipForFolder(folder)) {
-        // Unzip and remove .zip
-        std::string unzipCmd = "unzip -o '" + zipPath + "' -d '" + basePath + "'";
-        printf("[RomspediaDownload] Unzipping: %s\n", unzipCmd.c_str());
-        int ret = system(unzipCmd.c_str());
+        int ret = -1;
+        if (ext == ".zip") {
+            std::string unzipCmd = "unzip -o '" + archivePath + "' -d '" + basePath + "'";
+            printf("[RomspediaDownload] Unzipping: %s\n", unzipCmd.c_str());
+            ret = system(unzipCmd.c_str());
+        } else if (ext == ".rar") {
+            // Try unrar first, fallback to 7z if not available
+            std::string unrarCmd = "unrar x -o+ '" + archivePath + "' '" + basePath + "'";
+            printf("[RomspediaDownload] Unraring: %s\n", unrarCmd.c_str());
+            ret = system(unrarCmd.c_str());
+            if (ret != 0) {
+                std::string sevenzCmd = "7z x -y -o'" + basePath + "' '" + archivePath + "'";
+                printf("[RomspediaDownload] 7z fallback: %s\n", sevenzCmd.c_str());
+                ret = system(sevenzCmd.c_str());
+            }
+        }
         if (ret != 0) {
-            printf("[RomspediaDownload] Unzip failed\n");
+            printf("[RomspediaDownload] Extraction failed\n");
             return false;
         }
-        unlink(zipPath.c_str());
+        unlink(archivePath.c_str());
     }
     return true;
 }
