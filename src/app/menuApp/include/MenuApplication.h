@@ -50,6 +50,7 @@ private:
     std::vector<SiteDescriptor> siteRegistry;
     int currentSiteIndex = -1; // index into siteRegistry
     std::string currentSite;   // cached convenience (display or id)
+    std::string currentConsoleName; // track current console for persistence
 public:
     MenuApplication();
     ~MenuApplication();
@@ -69,7 +70,7 @@ private:
     void handlePatchNotesLoaded(std::vector<std::string>* linesPtr);
     void updateCurrentScreenAnimations(bool& needsRedraw);
     void fetchConsolesAsync();
-    void fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen, const std::string& consoleName);
+    void fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen);
     void fetchGameDetailsAsync(const ListItem& game, SDL_Texture* iconTexture, const std::string& consoleName);
     static void fetchPatchNotesAsync(std::shared_ptr<PatchNotesScreen> patchScreen);
     void showNoInternetAndExit();

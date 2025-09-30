@@ -104,8 +104,9 @@ void MenuApplication::handleConsolesLoaded(std::vector<ListItem>* consolesPtr) {
             } else {
                 printf("[ConsoleMap] Selected '%s' has NO mapping\n", selectedConsoleName.c_str());
             }
+            currentConsoleName = selectedConsoleName; // Set member variable for persistence
             menuSystem->pushScreen(std::make_shared<LoadingScreen>("Loading games..."));
-            fetchGamesAsync(item.downloadUrl, 1, false, selectedConsoleName);
+            fetchGamesAsync(item.downloadUrl, 1, false);
         },
         nullptr,
         PaginationInfo()
@@ -128,15 +129,14 @@ void MenuApplication::handleGamesLoaded(GameListData* gameData) {
     auto onPageChange = [this, gameData](int page) {
         auto currentScreen2 = menuSystem->getCurrentScreen();
         auto listScreen2 = std::dynamic_pointer_cast<ListScreen>(currentScreen2);
-        std::string consoleName = gameData->consoleName;
         if (listScreen2 && page > 1) {
             listScreen2->setLoadingMore(true);
             std::string currentBaseUrl = listScreen2->getCurrentPaginationBaseUrl();
-            fetchGamesAsync(currentBaseUrl, page, false, consoleName);
+            fetchGamesAsync(currentBaseUrl, page, false);
         } else {
             std::string baseUrl = gameData->baseUrl;
             menuSystem->pushScreen(std::make_shared<LoadingScreen>("Loading page " + std::to_string(page)));
-            fetchGamesAsync(baseUrl, page, true, consoleName);
+            fetchGamesAsync(baseUrl, page, true);
         }
     };
     auto newListScreen = std::make_shared<ListScreen>(
@@ -148,11 +148,10 @@ void MenuApplication::handleGamesLoaded(GameListData* gameData) {
         onPageChange,
         gameData->pagination
     );
-    std::string selectedConsoleName = gameData->consoleName;
-    newListScreen->onItemSelected2 = [this, newListScreen, selectedConsoleName](const ListItem& game, int index) {
+    newListScreen->onItemSelected2 = [this, newListScreen](const ListItem& game, int index) {
         SDL_Texture* iconTexture = index >= 0 ? newListScreen->getTextureAt(index) : nullptr;
         menuSystem->pushScreen(std::make_shared<LoadingScreen>("Loading game details..."));
-        fetchGameDetailsAsync(game, iconTexture, selectedConsoleName);
+        fetchGameDetailsAsync(game, iconTexture, currentConsoleName);
     };
     newListScreen->setTallGridMode(true);
     menuSystem->popScreen();
@@ -202,9 +201,8 @@ void MenuApplication::fetchConsolesAsync() {
 }
 
 
-void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen, const std::string& consoleName) {
-    std::string safeConsoleName = consoleName.empty() ? "GENERIC" : consoleName;
-    std::thread([this, baseUrl, page, safeConsoleName]() {
+void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen) {
+    std::thread([this, baseUrl, page]() {
         auto scraper = currentScraper();
         auto result = scraper ? scraper->fetchGames(baseUrl, page) : std::make_pair(std::vector<ListItem>(), PaginationInfo());
         GameListData* gameData = new GameListData();
@@ -212,7 +210,7 @@ void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool
         gameData->pagination = result.second;
         gameData->title = "Games";
         gameData->baseUrl = baseUrl;
-        gameData->consoleName = safeConsoleName; // Always set a non-empty console name
+        gameData->consoleName = currentConsoleName; // Use member variable for persistence
         SDL_Event event; SDL_zero(event);
         event.type = SDL_USEREVENT; event.user.code = EVENT_GAMES_LOADED; event.user.data1 = gameData;
         SDL_PushEvent(&event);
