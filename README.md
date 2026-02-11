@@ -53,7 +53,16 @@ It works on both the **stock Trimui OS** and **[CrossMix OS](https://github.com/
 - [ ] **Auto-updating** for seamless releases  
 - [ ] Improve modularity of scrapers & reduce repeated logic  
 - [ ] Replace regex-based parsing with a cleaner library  
-- [ ] Fix missing images due to `SDL2_image` lacking WebP support in CrossMix  
+- [ ] Fix missing images due to `SDL2_image` lacking WebP support in CrossMix
+- [ ] Theming
+- [ ] Switching to 7z for decompression, will allow for .rar decompression thus increasing compatibility
+- [ ] Removing Gamulator
+- [ ] Support for Knulli (as well as other devices)
+- [ ] Global searching (search through all sources at the same time)
+- [ ] Downloading multiple games at the same time asynchronously (with a download manager)
+- [ ] Pausing downloads
+- [ ] Downloading in background while gaming (if possible)
+- [ ] More sources
 
 ---
 
