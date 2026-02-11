@@ -20,6 +20,7 @@ namespace UiUtils {
 
     void RenderTextCentered(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, const Color& color);
     void RenderText(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, const Color& color, float scale = 1.0f);
+    void RenderTextRight(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, const Color& color);
     void RenderTextWrapped(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, int maxWidth, const Color& color);
     void RenderTextCenteredInBox(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, const SDL_Rect& box, const Color& color);
     std::string ClampTextToLines(const std::string& text, TTF_Font* font, int maxWidth, int maxLines);

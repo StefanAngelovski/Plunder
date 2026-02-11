@@ -187,4 +187,14 @@ void CarouselMenuScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
 
     // Draw button hints (subtle gray)
     UiUtils::RenderTextCentered(renderer, font, "A: Back   B: Select   D-pad: Move", centerX, 700, UiUtils::Color(200,200,200));
+    
+    // Show update notification at bottom right if an update is available
+    if (UpdateChecker::hasCheckedForUpdates() && UpdateChecker::isUpdateAvailable()) {
+        std::string updateText = "Update available: " + UpdateChecker::getLatestVersion();
+        UiUtils::Color updateColor(50, 255, 150);  // Green color
+        // Render at bottom right with some padding
+        int textX = 1280 - 20;  // 20px from right edge
+        int textY = 680;        // Near bottom
+        UiUtils::RenderTextRight(renderer, font, updateText, textX, textY, updateColor);
+    }
 }

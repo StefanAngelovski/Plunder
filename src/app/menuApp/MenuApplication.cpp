@@ -36,6 +36,10 @@ bool MenuApplication::initialize() {
     menuSystem = new MenuSystem(renderer, font);
     buildSiteRegistry();
     setupScreens();
+    
+    // Start background update check
+    UpdateChecker::checkForUpdatesAsync();
+    
     running = true;
     return true;
 }

@@ -7,8 +7,12 @@
 #include <unistd.h>
 #include <iostream>
 #include <errno.h>
+#include <thread>
+#include <atomic>
+#include <mutex>
 
 #include "../../carousel/include/CarouselMenuScreen.h"
+#include "../../../utils/include/UpdateChecker.h"
 
 class SettingsScreen : public CarouselMenuScreen {
 public:
@@ -23,6 +27,10 @@ public:
     // UI update
     void updateCheckboxLabel();
     void render(SDL_Renderer* renderer, TTF_Font* font) override;
+
+    // Update checking
+    void checkForUpdates();
+    void downloadAndInstallUpdate();
 
 protected:
     // Custom rendering for each carousel item
@@ -41,4 +49,24 @@ private:
     bool cacheClearedFlash = false;
     std::chrono::steady_clock::time_point cacheClearedFlashStart;
     static constexpr int cacheClearedFlashDurationMs = 1000; // 1 second
+
+    // Update state
+    enum class UpdateState {
+        Idle,
+        Checking,
+        UpdateAvailable,
+        Downloading,
+        ReadyToInstall,
+        Error
+    };
+    
+    std::atomic<UpdateState> updateState{UpdateState::Idle};
+    UpdateInfo updateInfo;
+    std::mutex updateMutex;
+    std::string updateStatusText;
+    std::atomic<long> downloadProgress{0};
+    std::atomic<long> downloadTotal{0};
+    
+    // Helper to get status text for current update state
+    std::string getUpdateStatusText();
 };

@@ -3,6 +3,78 @@ set -eu
 cd "$(dirname "$0")"
 export LD_LIBRARY_PATH="$(pwd)/lib:${LD_LIBRARY_PATH:-}"
 
+# ==================== AUTO-UPDATE HANDLING ====================
+UPDATE_MARKER="./.update_pending"
+UPDATE_STAGING="./.update_staging"
+
+apply_update() {
+    if [ ! -f "$UPDATE_MARKER" ]; then
+        return 0
+    fi
+    
+    echo "[Plunder] Pending update detected, applying..."
+    
+    # Read the zip path from marker file
+    ZIP_PATH=$(grep '^ZIP_PATH=' "$UPDATE_MARKER" | cut -d'=' -f2-)
+    VERSION=$(grep '^VERSION=' "$UPDATE_MARKER" | cut -d'=' -f2-)
+    
+    if [ -z "$ZIP_PATH" ] || [ ! -f "$ZIP_PATH" ]; then
+        echo "[Plunder] Error: Update zip not found at $ZIP_PATH"
+        rm -f "$UPDATE_MARKER"
+        return 1
+    fi
+    
+    echo "[Plunder] Extracting update $VERSION from $ZIP_PATH"
+    
+    # Create backup of current binary in case update fails
+    if [ -f ./Plunder ]; then
+        cp ./Plunder ./Plunder.bak 2>/dev/null || true
+    fi
+    
+    # Extract the update (overwrite existing files)
+    # The zip should contain a Plunder folder at root
+    TEMP_EXTRACT="/tmp/plunder_update_extract"
+    rm -rf "$TEMP_EXTRACT"
+    mkdir -p "$TEMP_EXTRACT"
+    
+    if unzip -o "$ZIP_PATH" -d "$TEMP_EXTRACT" >/dev/null 2>&1; then
+        # Check if extracted to Plunder subfolder or directly
+        if [ -d "$TEMP_EXTRACT/Plunder" ]; then
+            cp -rf "$TEMP_EXTRACT/Plunder/"* ./ 2>/dev/null || true
+        else
+            cp -rf "$TEMP_EXTRACT/"* ./ 2>/dev/null || true
+        fi
+        
+        # Make sure the new binary is executable
+        chmod +x ./Plunder 2>/dev/null || true
+        chmod +x ./launch.sh 2>/dev/null || true
+        chmod +x ./bin/* 2>/dev/null || true
+        
+        echo "[Plunder] Update applied successfully to version $VERSION"
+        
+        # Clean up
+        rm -rf "$TEMP_EXTRACT"
+        rm -rf "$UPDATE_STAGING"
+        rm -f "$UPDATE_MARKER"
+        rm -f ./Plunder.bak
+        
+        return 0
+    else
+        echo "[Plunder] Error: Failed to extract update"
+        # Restore backup if extraction failed
+        if [ -f ./Plunder.bak ]; then
+            mv ./Plunder.bak ./Plunder
+        fi
+        rm -rf "$TEMP_EXTRACT"
+        rm -f "$UPDATE_MARKER"
+        return 1
+    fi
+}
+
+# Apply any pending update before starting
+apply_update
+
+# ==================== INTRO VIDEO HANDLING ====================
 INTRO_VIDEO=./videos/Intro.mp4
 FFPLAY=./bin/ffplay
 INTRO_MAX_SECONDS=${PLUNDER_INTRO_MAX_SECONDS:-10}

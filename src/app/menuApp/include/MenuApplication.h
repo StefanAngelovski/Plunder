@@ -12,6 +12,7 @@
 #include "../../consolePolicies/GameListData.h"
 #include "../../../utils/include/UiUtils.h"
 #include "../../../utils/include/HttpUtils.h"
+#include "../../../utils/include/UpdateChecker.h"
 #include "../../../scraper/SiteScraper.h"
 #include "../../../scraper/Hexrom/include/HexromScraper.h"
 #include "../../../scraper/Gamulator/include/GamulatorScraper.h"

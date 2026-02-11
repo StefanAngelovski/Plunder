@@ -40,6 +40,22 @@ namespace UiUtils {
         TTF_SetFontStyle(font, prevStyle);
     }
 
+    // Draws a single line of text right-aligned at (x, y). The right edge of the text is placed at x. Used for right-aligned labels, notifications at screen edges.
+    void RenderTextRight(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, const Color& color) {
+        if (!font) return;
+        int prevStyle = TTF_GetFontStyle(font);
+        TTF_SetFontStyle(font, prevStyle | TTF_STYLE_BOLD);
+        SDL_Surface* surface = TTF_RenderText_Solid(font, text.c_str(), color.toSDLColor());
+        if (!surface) { TTF_SetFontStyle(font, prevStyle); return; }
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        if (!texture) { SDL_FreeSurface(surface); TTF_SetFontStyle(font, prevStyle); return; }
+        SDL_Rect destRect = {x - surface->w, y - surface->h / 2, surface->w, surface->h};
+        SDL_RenderCopy(renderer, texture, NULL, &destRect);
+        SDL_DestroyTexture(texture);
+        SDL_FreeSurface(surface);
+        TTF_SetFontStyle(font, prevStyle);
+    }
+
     // Draws multi-line text at (x, y), automatically wrapping lines to fit within maxWidth pixels. The top-left of the first line is placed at (x, y). Used for paragraphs, descriptions, etc.
     void RenderTextWrapped(SDL_Renderer* renderer, TTF_Font* font, const std::string& text, int x, int y, int maxWidth, const Color& color) {
         if (!font) return;

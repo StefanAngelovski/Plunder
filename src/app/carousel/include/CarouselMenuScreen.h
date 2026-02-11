@@ -11,6 +11,7 @@
 #include "CarouselMenuTypes.h"
 #include "../../menuApp/include/MenuSystem.h"
 #include "../../../utils/include/UiUtils.h"
+#include "../../../utils/include/UpdateChecker.h"
 #include "../../ControllerButtons.h"
 
 // SDL
