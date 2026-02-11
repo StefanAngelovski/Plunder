@@ -1,3 +1,4 @@
+# EXPECT BIG RELEASES COMING, MAJOR RELEASE v2.0.0 WILL INCLUDE AUTO-UPDATING, SO EVERYONE USING 1.0.0 WILL HAVE TO MIGRATE IN ORDER TO RECEIVE UPDATES!!!
 # 🏴‍☠️ Plunder  
 
 **A romsite scraper and frontend for the Trimui Smart Pro handheld.**  
