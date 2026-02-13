@@ -1,4 +1,5 @@
 #include "include/PatchNotesScreen.h"
+#include "../../utils/include/Theme.h"
 
 PatchNotesScreen::PatchNotesScreen() {}
 
@@ -36,8 +37,8 @@ void PatchNotesScreen::setNotes(const std::vector<std::string>& n) {
 }
 
 void PatchNotesScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
-    // Teal background for consistency with main menu and carousel
-    SDL_SetRenderDrawColor(renderer, 32, 170, 180, 255);
+    // Theme background
+    Theme::getInstance().applyBackgroundAlt(renderer);
     SDL_RenderClear(renderer);
     int x = 80, y = 60;
     UiUtils::RenderText(renderer, font, "Patch Notes", x, y, UiUtils::Color(255,255,80), 1.5f);

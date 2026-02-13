@@ -8,6 +8,7 @@
 #include "../../loadingScreen/include/LoadingScreen.h"
 #include "../../gameDetailsScreen/include/GameDetailsScreen.h"
 #include "../../settingsScreen/include/SettingsScreen.h"
+#include "../../themesScreen/include/ThemesScreen.h"
 #include "../../patchNotesScreen/include/PatchNotesScreen.h"
 #include "../../consolePolicies/GameListData.h"
 #include "../../../utils/include/UiUtils.h"

@@ -6,6 +6,7 @@
 //
 
 #include "include/ListScreen.h"  
+#include "../../utils/include/Theme.h"
 #include "../../scraper/Romspedia/include/RomspediaScraperFilter.h"
 #include "../../scraper/Romspedia/include/RomspediaScraper.h"
 
@@ -404,8 +405,8 @@ void ListScreen::loadTexture(SDL_Renderer* renderer, int index) {
 // --- Render -------------------------------------------------------------------------------
 void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
     updateTextures(renderer);
-    // Use a solid teal background to match the main menu and reference image
-    SDL_SetRenderDrawColor(renderer, 32, 170, 180, 255); // Main menu teal
+    // Theme background
+    Theme::getInstance().applyBackgroundAlt(renderer);
     SDL_RenderClear(renderer);
     int centerX = 1280 / 2;
     // Draw title with shadow for prominence
@@ -500,19 +501,20 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
                 SDL_Rect tileRect = {startX + col * tileWidth + tilePadding / 2, y, tileWidth - tilePadding, tileHeight};
                 bool isSelected = (index == selectedIndex);
                 // --- Card background with modern color and drop shadow ---
+                SDL_Color cardBg = Theme::getInstance().cardBackground();
                 SDL_Rect shadowRect = tileRect;
                 shadowRect.x += 6; shadowRect.y += 8;
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, (Uint8)(60 * (rowAlpha)) ); // Drop shadow
                 SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
                 SDL_RenderFillRect(renderer, &shadowRect);
-                SDL_SetRenderDrawColor(renderer, 32, 120, 140, (Uint8)(210 * (rowAlpha)) );
+                SDL_SetRenderDrawColor(renderer, cardBg.r, cardBg.g, cardBg.b, (Uint8)(210 * (rowAlpha)) );
                 SDL_RenderFillRect(renderer, &tileRect);
                 // --- Rounded corners (approximate) ---
-                // Rounded corners (approx)
-                drawApproxRoundedBorder(renderer, tileRect, 24, SDL_Color{32,120,140,(Uint8)(210 * (rowAlpha))}, alpha);
+                drawApproxRoundedBorder(renderer, tileRect, 24, SDL_Color{cardBg.r, cardBg.g, cardBg.b, (Uint8)(210 * (rowAlpha))}, alpha);
                 // --- Selection border ---
                 if (isSelected) {
-                    SDL_SetRenderDrawColor(renderer, 255, 220, 60, alpha);
+                    SDL_Color accent = Theme::getInstance().accentPrimary();
+                    SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, alpha);
                     SDL_RenderDrawRect(renderer, &tileRect);
                 }
                 // --- Render image or centered text ---
@@ -547,8 +549,9 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
                     SDL_SetTextureAlphaMod(textures[index], 255);
                     // Inner rounding mask (inverse) for image corners
                     int ir = 18;
+                    SDL_Color cardBgMask = Theme::getInstance().cardBackground();
                     for (int dx = 0; dx < ir; ++dx) for (int dy = 0; dy < ir; ++dy) if ((dx*dx + dy*dy) > ir*ir) {
-                        SDL_SetRenderDrawColor(renderer, 32, 120, 140, (Uint8)(210 * (rowAlpha)) );
+                        SDL_SetRenderDrawColor(renderer, cardBgMask.r, cardBgMask.g, cardBgMask.b, (Uint8)(210 * (rowAlpha)) );
                         SDL_RenderDrawPoint(renderer, dstRect.x + dx, dstRect.y + dy);
                         SDL_RenderDrawPoint(renderer, dstRect.x + dstRect.w-1-dx, dstRect.y + dy);
                         SDL_RenderDrawPoint(renderer, dstRect.x + dx, dstRect.y + dstRect.h-1-dy);

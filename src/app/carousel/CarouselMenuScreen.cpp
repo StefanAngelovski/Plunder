@@ -1,8 +1,9 @@
 #include "include/CarouselMenuScreen.h"
+#include "../../utils/include/Theme.h"
 
 void CarouselMenuScreen::renderItem(SDL_Renderer* renderer, TTF_Font* font, int i, int x, int y, int w, int h, bool focused) {
     // Transparent background with square borders
-    SDL_Color borderColor = focused ? SDL_Color{255, 255, 255, 255} : SDL_Color{180, 180, 180, 255};
+    SDL_Color borderColor = focused ? Theme::getInstance().borderFocused() : Theme::getInstance().borderUnfocused();
     int borderThickness = focused ? 3 : 2;
     
     // Draw square border (no fill, no rounded corners)
@@ -39,12 +40,21 @@ void CarouselMenuScreen::renderItem(SDL_Renderer* renderer, TTF_Font* font, int 
         }
     }
     // Label
-    UiUtils::Color labelColor(255,255,255);
+    SDL_Color textCol = Theme::getInstance().textPrimary();
+    UiUtils::Color labelColor(textCol.r, textCol.g, textCol.b);
     UiUtils::RenderTextCentered(renderer, font, items[i].label, x + w/2, y + h + 32, labelColor);
 }
 void CarouselMenuScreen::clearItems() {
     items.clear();
     selectedIndex = 0;
+}
+
+void CarouselMenuScreen::setSelectedIndex(int index) {
+    if (index >= 0 && index < (int)items.size()) {
+        selectedIndex = index;
+        animSelectedIndex = (float)index;
+        animVelocity = 0.0f;
+    }
 }
 
 CarouselMenuScreen::~CarouselMenuScreen() {
@@ -142,8 +152,8 @@ bool CarouselMenuScreen::update() {
 }
 
 void CarouselMenuScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
-    // Teal background
-    SDL_SetRenderDrawColor(renderer, 24, 153, 165, 255);
+    // Theme background
+    Theme::getInstance().applyBackground(renderer);
     SDL_RenderClear(renderer);
 
     // --- Animation step ---
@@ -186,12 +196,14 @@ void CarouselMenuScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
     }
 
     // Draw button hints (subtle gray)
-    UiUtils::RenderTextCentered(renderer, font, "A: Back   B: Select   D-pad: Move", centerX, 700, UiUtils::Color(200,200,200));
+    SDL_Color hintCol = Theme::getInstance().textSecondary();
+    UiUtils::RenderTextCentered(renderer, font, "A: Back   B: Select   D-pad: Move", centerX, 700, UiUtils::Color(hintCol.r, hintCol.g, hintCol.b));
     
     // Show update notification at bottom right if an update is available
     if (UpdateChecker::hasCheckedForUpdates() && UpdateChecker::isUpdateAvailable()) {
         std::string updateText = "Update available: " + UpdateChecker::getLatestVersion();
-        UiUtils::Color updateColor(50, 255, 150);  // Green color
+        SDL_Color highlightCol = Theme::getInstance().textHighlight();
+        UiUtils::Color updateColor(highlightCol.r, highlightCol.g, highlightCol.b);
         // Render at bottom right with some padding
         int textX = 1280 - 20;  // 20px from right edge
         int textY = 680;        // Near bottom

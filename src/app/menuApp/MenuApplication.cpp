@@ -1,4 +1,5 @@
 #include "include/MenuApplication.h"
+#include "../../utils/include/Theme.h"
 
 // ===================== Internal helper structs & constants ===================== //
 struct DetailsWithTexture { GameDetails details; SDL_Texture* texture; };
@@ -252,7 +253,7 @@ void MenuApplication::fetchPatchNotesAsync(std::shared_ptr<PatchNotesScreen> pat
 // ===================== Misc Helpers ===================== //
 void MenuApplication::showNoInternetAndExit() {
     while (!HttpUtils::hasInternet()) {
-        SDL_SetRenderDrawColor(renderer, 20, 20, 40, 255);
+        Theme::getInstance().applyBackgroundDark(renderer);
         SDL_RenderClear(renderer);
         if (font) {
             UiUtils::RenderTextCentered(renderer, font, "No internet connection detected!", 1280/2, 720/2 - 40, UiUtils::Color(255,80,80));
@@ -315,7 +316,13 @@ void MenuApplication::setupScreens() {
         fetchPatchNotesAsync(patchScreen);
     });
     carousel->addItem("Settings", "", [this]() {
-        menuSystem->pushScreen(std::make_shared<SettingsScreen>([this]() { menuSystem->popScreen(); }));
+        auto showThemes = [this]() {
+            menuSystem->pushScreen(std::make_shared<ThemesScreen>([this]() { menuSystem->popScreen(); }));
+        };
+        menuSystem->pushScreen(std::make_shared<SettingsScreen>(
+            [this]() { menuSystem->popScreen(); },
+            showThemes
+        ));
     });
     carousel->addItem("Exit", "", [this]() { running = false; });
     menuSystem->pushScreen(carousel);

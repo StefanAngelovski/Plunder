@@ -1,12 +1,12 @@
 #include "include/SettingsScreen.h"
 #include "../../Version.h"
+#include "../../utils/include/Theme.h"
 
 #define CONFIG_PATH "/mnt/SDCARD/Apps/Plunder/config.json"
 #define CACHE_PATH "/mnt/SDCARD/Apps/Plunder/cache/"
 
-// SettingsScreen constructor implementation
-SettingsScreen::SettingsScreen(std::function<void()> onBack)
-    : CarouselMenuScreen("Settings"), onBackCallback(onBack) {
+SettingsScreen::SettingsScreen(std::function<void()> onBack, std::function<void()> onThemes)
+    : CarouselMenuScreen("Settings"), onBackCallback(onBack), onThemesCallback(onThemes) {
     introDisabled = isIntroDisabled();
     updateCheckboxLabel();
 }
@@ -19,7 +19,7 @@ void SettingsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
 // Update the carousel items for the settings screen
 void SettingsScreen::updateCheckboxLabel() {
     clearItems();
-    // Add Check for Updates button (uses back.png as placeholder until update.png is added)
+    // Add Check for Updates button 
     addItem(getUpdateStatusText(), "images/settingsmenu/back.png", [this]() {
         UpdateState state = updateState.load();
         if (state == UpdateState::Idle || state == UpdateState::Error) {
@@ -43,6 +43,10 @@ void SettingsScreen::updateCheckboxLabel() {
         clearCache();
         cacheClearedFlash = true;
         cacheClearedFlashStart = std::chrono::steady_clock::now();
+    });
+    // Add Themes button
+    addItem("Themes", "images/settingsmenu/themes.png", [this]() {
+        if (onThemesCallback) onThemesCallback();
     });
     // Add Back button
     addItem("Back", "images/settingsmenu/back.png", [this]() {
@@ -217,10 +221,11 @@ void SettingsScreen::renderItem(SDL_Renderer* renderer, TTF_Font* font, int i, i
     
     // Custom background for Disable Intro BEFORE base so border/icon render atop
     if (items[i].label == "Disable Intro") {
+        SDL_Color toggleColor = introDisabled ? Theme::getInstance().toggleOn() : Theme::getInstance().toggleOff();
         if (introDisabled) {
-            SDL_SetRenderDrawColor(renderer, 0, 220, 180, focused ? 255 : 220);
+            SDL_SetRenderDrawColor(renderer, toggleColor.r, toggleColor.g, toggleColor.b, focused ? 255 : 220);
         } else {
-            SDL_SetRenderDrawColor(renderer, 0, 120, 140, focused ? 200 : 160);
+            SDL_SetRenderDrawColor(renderer, toggleColor.r, toggleColor.g, toggleColor.b, focused ? 200 : 160);
         }
         SDL_Rect bgRect = {x + 2, y + 2, w - 4, h - 4};
         SDL_RenderFillRect(renderer, &bgRect);

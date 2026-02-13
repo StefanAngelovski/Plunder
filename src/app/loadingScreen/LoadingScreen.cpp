@@ -1,12 +1,13 @@
 #include "include/LoadingScreen.h"
+#include "../../utils/include/Theme.h"
 
 LoadingScreen::LoadingScreen(const std::string& msg) : message(msg) {}
 void LoadingScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
     // Animate loading circle
     frameCounter++;
     if (frameCounter > 2) { frameCounter = 0; animationFrame = (animationFrame + 1) % 60; }
-    // Teal background (main menu color)
-    SDL_SetRenderDrawColor(renderer, 32, 170, 180, 255);
+    // Theme background
+    Theme::getInstance().applyBackgroundAlt(renderer);
     SDL_RenderClear(renderer);
     int centerX = 1280 / 2;
     int centerY = 720 / 2;

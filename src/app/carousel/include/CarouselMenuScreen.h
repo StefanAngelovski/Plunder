@@ -51,6 +51,8 @@ public:
     
     void addItem(const std::string& label, const std::string& imagePath, std::function<void()> action);
     void clearItems();
+    void setSelectedIndex(int index);
+    int getSelectedIndex() const { return selectedIndex; }
     
     // Screen interface
     void render(SDL_Renderer* renderer, TTF_Font* font) override;

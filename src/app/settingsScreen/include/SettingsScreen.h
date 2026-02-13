@@ -16,8 +16,7 @@
 
 class SettingsScreen : public CarouselMenuScreen {
 public:
-    // Construct the settings screen, optionally with a callback for the Back button
-    SettingsScreen(std::function<void()> onBack = nullptr);
+    SettingsScreen(std::function<void()> onBack = nullptr, std::function<void()> onThemes = nullptr);
 
     // Persistent settings
     static bool isIntroDisabled();
@@ -40,6 +39,7 @@ private:
     // State
     bool introDisabled;
     std::function<void()> onBackCallback;
+    std::function<void()> onThemesCallback;
 
     // Animation state for UI effects
     bool disableIntroGlow = false;

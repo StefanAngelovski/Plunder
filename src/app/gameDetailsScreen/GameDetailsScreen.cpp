@@ -1,4 +1,5 @@
 #include "include/GameDetailsScreen.h"
+#include "../../utils/include/Theme.h"
 
 GameDetailsScreen::GameDetailsScreen(const GameDetails& details, SDL_Texture* iconTexture)
     : details(details), iconTexture(iconTexture) {
@@ -127,7 +128,7 @@ static void RenderDownloadPopup(SDL_Renderer* renderer, TTF_Font* font, const st
 }
 
 void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
-    SDL_SetRenderDrawColor(renderer, 0, 150, 150, 255); // Teal blue color
+    Theme::getInstance().applyBackground(renderer);
     SDL_RenderClear(renderer);
     
     int x = 60, y = 40;
