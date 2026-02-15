@@ -136,38 +136,53 @@ void DownloadManager::downloadWorker(const std::string& url, const std::string& 
             if (!baseDir.empty()) {
                 std::string finalFileName = outPath.substr(outPath.find_last_of('/')+1);
                 std::string newPath = baseDir + "/" + finalFileName;
-                bool isZip = false;
-                if (finalFileName.size() > 4) {
-                    std::string ext = finalFileName.substr(finalFileName.size()-4);
-                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                    if (ext == ".zip" || ext == ".rar") isZip = true;
+                bool isArchive = false;
+                if (finalFileName.size() > 3) {
+                    std::string ext4 = finalFileName.size() > 4 ? finalFileName.substr(finalFileName.size()-4) : "";
+                    std::string ext3 = finalFileName.substr(finalFileName.size()-3);
+                    std::transform(ext4.begin(), ext4.end(), ext4.begin(), ::tolower);
+                    std::transform(ext3.begin(), ext3.end(), ext3.begin(), ::tolower);
+                    if (ext4 == ".zip" || ext4 == ".rar" || ext3 == ".7z") isArchive = true;
                 }
                 
-                bool unzip = isZip && shouldUnzipForFolder(details.mappedFolder);
-                printf("[Download] Post-processing: file=%s isZip=%d unzip=%d folder=%s\n", finalFileName.c_str(), (int)isZip, (int)unzip, details.mappedFolder.c_str());
+                bool unzip = isArchive && shouldUnzipForFolder(details.mappedFolder);
+                printf("[Download] Post-processing: file=%s isArchive=%d unzip=%d folder=%s\n", finalFileName.c_str(), (int)isArchive, (int)unzip, details.mappedFolder.c_str());
                 
                 if (unzip) {
                     // Create temp extraction dir
                     std::string tmpDir = baseDir + "/.__extract_tmp";
                     mkdir(tmpDir.c_str(), 0755);
                     
-                    // Use busybox/unzip if available; try unzip then 7z
-                    auto cmdExists = [](const char* c){ return system((std::string("command -v ") + c + " >/dev/null 2>&1").c_str()) == 0; };
-                    bool haveUnzip = cmdExists("unzip");
-                    bool have7z = cmdExists("7z");
+                    // Use bundled 7z binary (supports ZIP, RAR, 7z, and more)
+                    std::string bundled7z = "/mnt/SDCARD/Apps/Plunder/bin/7z";
                     int ret = -1;
                     
-                    if (haveUnzip) {
-                        // Show unzip message in UI
-                        downloadProgressText = "Unzipping...";
-                        ret = system((std::string("unzip -o \"") + outPath + "\" -d \"" + tmpDir + "\" >/dev/null 2>&1").c_str());
+                    // Show extraction message in UI
+                    downloadProgressText = "Extracting...";
+                    
+                    // Try bundled 7z first (handles ZIP, RAR, 7z, etc.)
+                    struct stat st7z;
+                    if (stat(bundled7z.c_str(), &st7z) == 0) {
+                        std::string cmd = bundled7z + " x -y \"" + outPath + "\" -o\"" + tmpDir + "\" >/dev/null 2>&1";
+                        ret = system(cmd.c_str());
+                        printf("[Download] Bundled 7z extraction: ret=%d\n", ret);
                     }
-                    if (ret != 0 && have7z) {
-                        ret = system((std::string("7z x -y \"") + outPath + "\" -o\"" + tmpDir + "\" >/dev/null 2>&1").c_str());
+                    
+                    // Fallback to system 7z if bundled not found
+                    if (ret != 0) {
+                        auto cmdExists = [](const char* c){ return system((std::string("command -v ") + c + " >/dev/null 2>&1").c_str()) == 0; };
+                        if (cmdExists("7z")) {
+                            ret = system((std::string("7z x -y \"") + outPath + "\" -o\"" + tmpDir + "\" >/dev/null 2>&1").c_str());
+                            printf("[Download] System 7z extraction: ret=%d\n", ret);
+                        } else if (cmdExists("unzip")) {
+                            // Last resort: unzip (ZIP only)
+                            ret = system((std::string("unzip -o \"") + outPath + "\" -d \"" + tmpDir + "\" >/dev/null 2>&1").c_str());
+                            printf("[Download] Fallback unzip extraction: ret=%d\n", ret);
+                        }
                     }
                     
                     if (ret != 0) {
-                        printf("[Download] Extraction skipped/failed: unzip=%d 7z=%d ret=%d (keeping zip)\n", haveUnzip?1:0, have7z?1:0, ret);
+                        printf("[Download] Extraction failed: ret=%d (keeping archive)\n", ret);
                     }
                     
                     if (ret == 0) {

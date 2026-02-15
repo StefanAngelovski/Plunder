@@ -21,22 +21,22 @@ std::string ExtractRomspediaDirectDownloadLink(const std::string& detailsPageUrl
         printf("[RomspediaDownload] Empty HTML for: %s\n", downloadPageUrl.c_str());
         return "";
     }
-    // Look for <a href=\"...zip|rar\" ...>
-    std::regex archiveRe(R"(<a[^>]+href=[\"']([^\"']+\.(zip|rar))[\"'])", std::regex::icase);
+    // Look for <a href=\"...zip|7z|rar\" ...>
+    std::regex archiveRe(R"(<a[^>]+href=[\"']([^\"']+\.(zip|7z|rar))[\"'])", std::regex::icase);
     std::smatch match;
     if (std::regex_search(html, match, archiveRe) && match.size() > 1) {
         std::string link = match[1].str();
         printf("[RomspediaDownload] Direct archive anchor match: %s\n", link.c_str());
         return link;
     }
-    // Fallback: look for any .zip or .rar link
-    std::regex urlArchiveRe(R"(https?://[^\"']+\.(zip|rar))", std::regex::icase);
+    // Fallback: look for any .zip, .7z, or .rar link
+    std::regex urlArchiveRe(R"(https?://[^\"']+\.(zip|7z|rar))", std::regex::icase);
     if (std::regex_search(html, match, urlArchiveRe) && match.size() > 0) {
         std::string link = match[0].str();
         printf("[RomspediaDownload] Fallback absolute archive match: %s\n", link.c_str());
         return link;
     }
-    printf("[RomspediaDownload] No zip/rar link found on page: %s\n", downloadPageUrl.c_str());
+    printf("[RomspediaDownload] No archive link found on page: %s\n", downloadPageUrl.c_str());
     return "";
 }
 
@@ -56,7 +56,7 @@ bool downloadAndExtractRomspediaZip(const std::string& downloadUrl, const std::s
     size_t dotPos = downloadUrl.find_last_of('.');
     if (dotPos != std::string::npos) {
         std::string urlExt = downloadUrl.substr(dotPos);
-        if (urlExt == ".rar" || urlExt == ".zip") ext = urlExt;
+        if (urlExt == ".rar" || urlExt == ".zip" || urlExt == ".7z") ext = urlExt;
     }
     std::string archivePath = basePath + "/" + romName + ext;
     printf("[RomspediaDownload] Downloading to: %s\n", archivePath.c_str());
@@ -66,21 +66,30 @@ bool downloadAndExtractRomspediaZip(const std::string& downloadUrl, const std::s
     }
     if (shouldUnzipForFolder(folder)) {
         int ret = -1;
-        if (ext == ".zip") {
-            std::string unzipCmd = "unzip -o '" + archivePath + "' -d '" + basePath + "'";
-            printf("[RomspediaDownload] Unzipping: %s\n", unzipCmd.c_str());
-            ret = system(unzipCmd.c_str());
-        } else if (ext == ".rar") {
-            // Try unrar first, fallback to 7z if not available
-            std::string unrarCmd = "unrar x -o+ '" + archivePath + "' '" + basePath + "'";
-            printf("[RomspediaDownload] Unraring: %s\n", unrarCmd.c_str());
-            ret = system(unrarCmd.c_str());
-            if (ret != 0) {
+        
+        // Use bundled 7z binary (supports ZIP, RAR, 7z, and more)
+        std::string bundled7z = "/mnt/SDCARD/Apps/Plunder/bin/7z";
+        struct stat st7z;
+        
+        if (stat(bundled7z.c_str(), &st7z) == 0) {
+            std::string cmd = bundled7z + " x -y -o'" + basePath + "' '" + archivePath + "'";
+            printf("[RomspediaDownload] Extracting with bundled 7z: %s\n", cmd.c_str());
+            ret = system(cmd.c_str());
+        }
+        
+        // Fallback to system extractors if bundled 7z not found
+        if (ret != 0) {
+            if (ext == ".zip") {
+                std::string unzipCmd = "unzip -o '" + archivePath + "' -d '" + basePath + "'";
+                printf("[RomspediaDownload] Fallback unzip: %s\n", unzipCmd.c_str());
+                ret = system(unzipCmd.c_str());
+            } else {
                 std::string sevenzCmd = "7z x -y -o'" + basePath + "' '" + archivePath + "'";
-                printf("[RomspediaDownload] 7z fallback: %s\n", sevenzCmd.c_str());
+                printf("[RomspediaDownload] Fallback 7z: %s\n", sevenzCmd.c_str());
                 ret = system(sevenzCmd.c_str());
             }
         }
+        
         if (ret != 0) {
             printf("[RomspediaDownload] Extraction failed\n");
             return false;

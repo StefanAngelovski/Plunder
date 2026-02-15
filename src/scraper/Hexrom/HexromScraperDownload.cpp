@@ -1,6 +1,6 @@
 #include "include/HexromScraperDownload.h"
 
-// Extracts the direct .zip download link from a Hexrom game details page.
+// Extracts the direct download link (.zip, .7z, .rar) from a Hexrom game details page.
 // NOTE: Real direct download button lives on the /download/ subpage of the game URL.
 std::string ExtractHexromDirectDownloadLink(const std::string& detailsPageUrl) {
     // Build the download page URL (append download/ if not already there)
@@ -21,19 +21,19 @@ std::string ExtractHexromDirectDownloadLink(const std::string& detailsPageUrl) {
         printf("[HexromDownload] Empty HTML for: %s\n", downloadPageUrl.c_str());
         return "";
     }
-    // Look for <a href="...zip" ...>
-    std::regex zipRe(R"(<a[^>]+href=["']([^"']+\.zip)["'])", std::regex::icase);
+    // Look for <a href="...zip/7z/rar" ...>
+    std::regex archiveRe(R"(<a[^>]+href=["']([^"']+\.(zip|7z|rar))["'])", std::regex::icase);
     std::smatch match;
-    if (std::regex_search(html, match, zipRe) && match.size() > 1) {
+    if (std::regex_search(html, match, archiveRe) && match.size() > 1) {
     std::string link = match[1].str();
-    printf("[HexromDownload] Direct zip anchor match: %s\n", link.c_str());
+    printf("[HexromDownload] Direct archive anchor match: %s\n", link.c_str());
     return link;
     }
-    // Fallback: look for any .zip link
-    std::regex urlZipRe(R"(https?://[^"']+\.zip)", std::regex::icase);
-    if (std::regex_search(html, match, urlZipRe) && match.size() > 0) {
+    // Fallback: look for any .zip/.7z/.rar link
+    std::regex urlArchiveRe(R"(https?://[^"']+\.(zip|7z|rar))", std::regex::icase);
+    if (std::regex_search(html, match, urlArchiveRe) && match.size() > 0) {
     std::string link = match[0].str();
-    printf("[HexromDownload] Fallback absolute zip match: %s\n", link.c_str());
+    printf("[HexromDownload] Fallback absolute archive match: %s\n", link.c_str());
     return link;
     }
     // Legacy logic: find the first <a href=...> after the details table (for older Hexrom pages)
@@ -42,14 +42,14 @@ std::string ExtractHexromDirectDownloadLink(const std::string& detailsPageUrl) {
     if (std::regex_search(html, tableMatch, tableRegex) && tableMatch.size() > 0) {
         size_t tableEnd = tableMatch.position(0) + tableMatch.length(0);
         std::string afterTable = html.substr(tableEnd);
-        std::regex aAfterRegex(R"(<a[^>]+href=["']([^"']+\.zip)["'][^>]*>)", std::regex::icase);
+        std::regex aAfterRegex(R"(<a[^>]+href=["']([^"']+\.(zip|7z|rar))["'][^>]*>)", std::regex::icase);
         std::smatch aAfterMatch;
         if (std::regex_search(afterTable, aAfterMatch, aAfterRegex) && aAfterMatch.size() > 1) {
         std::string link = aAfterMatch[1].str();
-        printf("[HexromDownload] Legacy after-table zip match: %s\n", link.c_str());
+        printf("[HexromDownload] Legacy after-table archive match: %s\n", link.c_str());
         return link;
         }
     }
-    printf("[HexromDownload] No zip link found on page: %s\n", downloadPageUrl.c_str());
+    printf("[HexromDownload] No archive link found on page: %s\n", downloadPageUrl.c_str());
     return "";
 }
