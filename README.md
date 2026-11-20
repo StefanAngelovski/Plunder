@@ -68,6 +68,10 @@ It works on both the **stock Trimui OS** and **[CrossMix OS](https://github.com/
 Development of Plunder was made possible thanks to the excellent **[Trimui Smart Pro Docker Build System by Maxwell](https://github.com/Maxwell-SS/trimui-smart-pro-build-system)**.  
 Please consult his documentation if you’d like to build Plunder from source.  
 
+**Releasing:** releases are published automatically by GitHub Actions (`.github/workflows/release.yml`).  
+Add notes under `## Unreleased` in [`CHANGELOG.md`](CHANGELOG.md); to ship, rename that heading to `## vX.Y.Z`, set the same `PLUNDER_VERSION` in `src/Version.h`, and push to `master`.  
+The workflow builds `Plunder.zip` with the Trimui toolchain and creates the `vX.Y.Z` release with those notes, which the in-app updater and Patch Notes screen pick up.  
+
 ---
 
 ## 🏴 Credits  

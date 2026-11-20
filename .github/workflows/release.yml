@@ -1,0 +1,75 @@
+# Publishes a GitHub release whenever src/Version.h is bumped on master.
+#
+# Every push to master runs a quick check: if a release for PLUNDER_VERSION
+# already exists, nothing happens. If the version is new, the app is built with
+# the Trimui toolchain (same Dockerfile as local builds), zipped as
+# Plunder.zip (a Plunder/ folder, ready for SDCARD/Apps/) and published as
+# vX.Y.Z with notes from the matching "## vX.Y.Z" section of CHANGELOG.md.
+# The in-app updater and Patch Notes screen read these releases.
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version
+        id: version
+        run: |
+          version=$(sed -n 's/^#define PLUNDER_VERSION "\(.*\)"/\1/p' src/Version.h)
+          if [ -z "$version" ]; then
+            echo "::error file=src/Version.h::PLUNDER_VERSION not found"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "v$version is already released. Bump PLUNDER_VERSION in src/Version.h to publish a new release." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release notes
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          scripts/release-notes.sh "${{ steps.version.outputs.version }}" > release-notes.md
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build toolchain image
+        if: steps.version.outputs.exists == 'false'
+        run: docker build -t plunder-build .
+
+      - name: Build Plunder
+        if: steps.version.outputs.exists == 'false'
+        run: docker run --rm -v "$PWD":/app -w /app plunder-build make
+
+      - name: Package Plunder.zip
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          test -x build/Plunder/Plunder
+          cd build && zip -r -q ../Plunder.zip Plunder
+          cd .. && unzip -l Plunder.zip | tail -1
+
+      - name: Publish release
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          gh release create "$tag" Plunder.zip \
+            --title "Plunder $tag" \
+            --notes-file release-notes.md \
+            --target "$GITHUB_SHA"
