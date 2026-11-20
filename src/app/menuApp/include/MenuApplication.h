@@ -15,9 +15,8 @@
 #include "../../../utils/include/HttpUtils.h"
 #include "../../../utils/include/UpdateChecker.h"
 #include "../../../scraper/SiteScraper.h"
-#include "../../../scraper/Hexrom/include/HexromScraper.h"
+#include "../../../scraper/Sites.h"
 #include "../../../scraper/GithubReleases/include/GitHubReleasesScraper.h"
-#include "../../../scraper/Romspedia/include/RomspediaScraper.h"
 #include "../../consolePolicies/ConsoleFolderMap.h"
 
 // SDL

@@ -67,14 +67,7 @@ class GameDetailsScreen : public Screen {
         
         // Download popup state
         bool showDownloadPopup = false;
-        std::vector<DownloadOption> downloadOptions;
-        int selectedDownloadOption = 0;
         std::string downloadPopupMessage;
-        // Download popup scroll state
-        int downloadPopupScrollOffset = 0;
-        int downloadPopupMaxVisible = 0;
-        int downloadPopupLastAxisValue = 0;
-        Uint32 downloadPopupLastAxisTime = 0;
         
         // Audio
         Mix_Chunk* cancelSound = nullptr;

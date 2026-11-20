@@ -55,8 +55,7 @@ bool MenuApplication::initialize() {
 // ===================== Site Registry Helpers ===================== //
 void MenuApplication::buildSiteRegistry() {
     siteRegistry.clear();
-    siteRegistry.push_back({"Hexrom", std::make_shared<HexromScraper>()});
-    siteRegistry.push_back({"Romspedia", std::make_shared<RomspediaScraper>()});
+    for (const std::string& id : Sites::Ids()) siteRegistry.push_back({id, Sites::Create(id)});
 }
 
 std::shared_ptr<SiteScraper> MenuApplication::currentScraper() const {

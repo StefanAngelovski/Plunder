@@ -21,11 +21,6 @@
 #include "../../../utils/include/StringUtils.h"
 #include "../../consolePolicies/ConsoleZipPolicy.h"
 
-struct DownloadOption {
-    std::string label;
-    std::string url;
-};
-
 class DownloadManager {
 public:
     DownloadManager();
@@ -51,8 +46,6 @@ public:
     void setButtonFocus(int focus) { downloadButtonFocus = focus; }
     
     // Static utility methods for scraping
-    static std::vector<DownloadOption> scrapeDownloadOptions(const std::string& pageUrl);
-    static std::string scrapeFinalDownloadLink(const std::string& versionUrl);
     static long getRemoteFileSize(const std::string& url);
     
 private:
@@ -61,7 +54,6 @@ private:
     
     // Utility methods
     static std::string humanReadableSize(long bytes);
-    static void downloadFileToDisk(const std::string& url, const std::string& outPath);
     
     // State variables
     std::atomic<bool> downloadInProgress{false};

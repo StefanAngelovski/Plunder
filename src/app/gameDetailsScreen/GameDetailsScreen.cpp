@@ -64,41 +64,13 @@ static void RestoreMusicVolume() {
     Mix_VolumeMusic(MIX_MAX_VOLUME);
 }
 
-// Helper: modal for choosing a download version, or for a result/error message.
-static void RenderDownloadPopup(SDL_Renderer* renderer, TTF_Font* font, const std::vector<DownloadOption>& options, int selected, int scrollOffset, const std::string& message) {
-    (void)font;
+// Helper: modal showing a download result or error message.
+static void RenderDownloadPopup(SDL_Renderer* renderer, const std::string& message) {
     using namespace UiUtils;
     const ThemeColors& t = Theme::getInstance().colors();
     DrawScrim(renderer);
     const int w = 760;
     const int x = (SCREEN_W - w) / 2;
-    if (!options.empty()) {
-        const int itemH = 50, maxVisible = 7;
-        int visible = std::min(maxVisible, (int)options.size());
-        int h = 96 + visible * itemH + 28;
-        int y = (SCREEN_H - h) / 2 - 10;
-        DrawPanel(renderer, SDL_Rect{x, y, w, h}, 24);
-        DrawText(renderer, GetFont(24, true), "Choose a version", x + 32, y + 28, t.textPrimary);
-        DrawText(renderer, GetFont(16), std::to_string(options.size()) + " available", x + 32, y + 62, t.textSecondary);
-        int listY = y + 96;
-        int end = std::min(scrollOffset + visible, (int)options.size());
-        for (int i = scrollOffset; i < end; ++i) {
-            SDL_Rect row{x + 20, listY + (i - scrollOffset) * itemH, w - 40 - 16, itemH - 6};
-            bool sel = (i == selected);
-            if (sel) {
-                FillRoundedRect(renderer, row, 12, WithAlpha(t.accentPrimary, 46));
-                FillRoundedRect(renderer, SDL_Rect{row.x + 8, row.y + 12, 4, row.h - 24}, 2, t.accentPrimary);
-            }
-            TTF_Font* f = GetFont(18, sel);
-            DrawText(renderer, f, Ellipsize(f, options[i].label, row.w - 40), row.x + 24, row.y + (row.h - TextHeight(f)) / 2, sel ? t.textPrimary : t.textSecondary);
-        }
-        if ((int)options.size() > visible) {
-            float pos = (float)scrollOffset / std::max(1, (int)options.size() - visible);
-            DrawScrollbar(renderer, x + w - 26, listY, visible * itemH - 6, (float)visible / options.size(), pos);
-        }
-        DrawHints(renderer, {{"DPAD", "Choose"}, {"A", "Download"}, {"B", "Cancel"}});
-        return;
-    }
     // Message dialog
     std::string lower = message;
     for (auto& ch : lower) ch = (char)std::tolower((unsigned char)ch);
@@ -276,14 +248,7 @@ void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         DrawHints(renderer, {{"DPAD", "Scroll, down to Download"}, {"B", "Back"}});
     }
 
-    if (showDownloadPopup) {
-        int maxVisible = 7;
-        int total = (int)downloadOptions.size();
-        int scrollOffset = downloadPopupScrollOffset;
-        if (scrollOffset > total - maxVisible) scrollOffset = std::max(0, total - maxVisible);
-        if (scrollOffset < 0) scrollOffset = 0;
-        RenderDownloadPopup(renderer, font, downloadOptions, selectedDownloadOption, scrollOffset, downloadPopupMessage);
-    }
+    if (showDownloadPopup) RenderDownloadPopup(renderer, downloadPopupMessage);
 }
 
 void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
@@ -317,108 +282,14 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
         // Block all other input while downloading
         return;
     }
-    // --- MODAL HANDLING: Always first! ---
+    // Result/error message: confirm or back closes it.
     if (showDownloadPopup) {
-        int maxVisible = 7;  // must match RenderDownloadPopup
-        int total = downloadOptions.size();
-        // D-pad navigation
-        if (e.type == SDL_KEYDOWN || e.type == SDL_CONTROLLERBUTTONDOWN) {
-            // B = back/close popup (now B closes modal, does NOT pop screen)
-            if ((e.type == SDL_KEYDOWN && (e.key.keysym.sym == SDLK_SPACE)) ||
-                (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_B)) {
-                showDownloadPopup = false;
-                return;
-            }
-            // A = select/download
-            if ((e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_RETURN) ||
-                (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_A)) {
-                if (!downloadOptions.empty()) {
-                    downloadPopupMessage = "Fetching download link...";
-                    std::string versionUrl = downloadOptions[selectedDownloadOption].url;
-                    std::thread([this, versionUrl]() {
-                        std::string finalLink = DownloadManager::scrapeFinalDownloadLink(versionUrl);
-                        downloadPopupMessage = "Download link: " + finalLink;
-                    }).detach();
-                }
-                return;
-            }
-            // Down
-            if ((e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_DOWN) ||
-                (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_DPAD_DOWN)) {
-                if (selectedDownloadOption + 1 < total) {
-                    selectedDownloadOption++;
-                    if (selectedDownloadOption >= downloadPopupScrollOffset + maxVisible) {
-                        downloadPopupScrollOffset = std::min(selectedDownloadOption, total - maxVisible);
-                    }
-                }
-                return;
-            }
-            // Up
-            if ((e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_UP) ||
-                (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_DPAD_UP)) {
-                if (selectedDownloadOption > 0) {
-                    selectedDownloadOption--;
-                    if (selectedDownloadOption < downloadPopupScrollOffset) {
-                        downloadPopupScrollOffset = selectedDownloadOption;
-                    }
-                }
-                return;
-            }
-        }
-        // Analog stick navigation
-        if (e.type == SDL_CONTROLLERAXISMOTION && e.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
-            int value = e.caxis.value;
-            if (abs(value) > 8000) {
-                Uint32 now = SDL_GetTicks();
-                if (downloadPopupLastAxisValue == 0 || now - downloadPopupLastAxisTime > 120) {
-                    if (value > 0 && selectedDownloadOption + 1 < total) {
-                        selectedDownloadOption++;
-                        if (selectedDownloadOption >= downloadPopupScrollOffset + maxVisible) {
-                            downloadPopupScrollOffset = std::min(selectedDownloadOption, total - maxVisible);
-                        }
-                    } else if (value < 0 && selectedDownloadOption > 0) {
-                        selectedDownloadOption--;
-                        if (selectedDownloadOption < downloadPopupScrollOffset) {
-                            downloadPopupScrollOffset = selectedDownloadOption;
-                        }
-                    }
-                    downloadPopupLastAxisTime = now;
-                }
-                downloadPopupLastAxisValue = value;
-            } else {
-                downloadPopupLastAxisValue = 0;
-            }
-            return;
-        }
-        // Block all other input from reaching the main screen while popup is open
+        if (e.type == SDL_CONTROLLERBUTTONDOWN &&
+            (e.cbutton.button == BUTTON_A || e.cbutton.button == BUTTON_B || e.cbutton.button == BUTTON_X))
+            showDownloadPopup = false;
         return;
     }
-    // Use a fixed average character width for line wrapping in handleInput
-    int aboutAreaWidth = 900;
-    int avgCharWidth = 12; // Approximate width for 20pt font
-    int maxCharsPerLine = aboutAreaWidth / avgCharWidth;
-    // Prepare aboutLines for scrolling bounds
-    std::vector<std::string> aboutLines;
-    {
-        std::istringstream aboutStream(details.about);
-        std::string paragraph;
-        while (std::getline(aboutStream, paragraph)) {
-            std::istringstream wordStream(paragraph);
-            std::string word, line;
-            while (wordStream >> word) {
-                std::string testLine = line.empty() ? word : line + " " + word;
-                if ((int)testLine.size() > maxCharsPerLine && !line.empty()) {
-                    aboutLines.push_back(line);
-                    line = word;
-                } else {
-                    line = testLine;
-                }
-            }
-            if (!line.empty()) aboutLines.push_back(line);
-        }
-    }
     int totalLines = aboutTotalLines;  // measured in render() with the real font
-    (void)aboutLines;
     if (e.type == SDL_CONTROLLERBUTTONDOWN) {
         // Back/close (now B is back)
         if (e.cbutton.button == BUTTON_B) { // B = back

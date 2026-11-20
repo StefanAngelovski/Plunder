@@ -2,6 +2,8 @@
 
 #include "../engine/Url.h"
 
+#include <cctype>
+
 namespace {
 const char* kArchiveLinks = "a[href$='.zip'], a[href$='.7z'], a[href$='.rar']";
 
@@ -56,6 +58,90 @@ SiteDefinition hexrom() {
         return url;
     };
     d.download.link = {{kArchiveLinks, "href"}};
+
+    // Filters: …/gameboy-advance/?search=…&genre=…&region=…&sort_by=…&order=…
+    d.filters.fields = {
+        {"Region", {"Select Region", "USA", "English(USA)", "English", "Europe", "USA Europe", "Germany", "Italy",
+                    "France", "Japan", "Korea", "USA & Japan", "Global", "English (USA)"}},
+        {"Sort by", {"Date", "Title", "Most Popular"}},
+        {"Order", {"Ascending", "Descending"}},
+        {"Genre", {
+        "Select Genre",
+        "Role Playing",
+        "Adventure, Role Playing",
+        "Fighting",
+        "Action",
+        "Adventure",
+        "Action, Simulation",
+        "Adventure, Platform",
+        "Hack, Role Playing",
+        "Misc",
+        "Platform",
+        "Action, Racing",
+        "Card Game",
+        "Action, Adventure",
+        "Action, Fighting",
+        "Strategy, Turn Based Tactics",
+        "Sports",
+        "Role Playing, Shooter",
+        "Beat Em Up",
+        "Board Game",
+        "Action, Beat Em Up",
+        "Racing",
+        "Role Playing, Strategy",
+        "Turn Based Tactics",
+        "Shooter",
+        "Action, Shooter",
+        "Role Playing, Simulation",
+        "Action, Role Playing",
+        "Action, Platform",
+        "Compilation",
+        "Action, Adventure, Platform",
+        "Action, Pinball",
+        "Puzzle",
+        "Action, Fighting, Role Playing",
+        "Adventure, Fighting",
+        "Platform, Shooter",
+        "Strategy",
+        "Card Game, Compilation",
+        "Simulation",
+        "Compilation, Misc",
+        "Sports, Simulation",
+        "Racing, Simulation",
+        "Action, Puzzle",
+        "Board Game, Card Game",
+        "Adventure, Beat Em Up",
+        "Action, Puzzle, Simulation, Strategy",
+        "Music, Puzzle, Simulation, Strategy",
+        "Card Game, Simulation",
+        "Racing, Sports",
+        "Card Game, Puzzle",
+        "Sports, Strategy",
+        "Puzzle, Simulation, Strategy",
+        "Puzzle, Shooter",
+        "Action, Music",
+        "Simulation, Strategy",
+        "Music",
+        "Board Game, Card Game, Misc",
+        "Educational",
+        "Puzzle, Sports",
+        "Board Game, Misc",
+        "Role-Playing",
+        "RPG"
+        }},
+    };
+    d.filters.url = [fields = d.filters.fields](const std::string& consoleUrl, const std::string& search, const std::vector<int>& c) {
+        auto option = [&](size_t field, bool skipDefault) -> std::string {
+            int i = field < c.size() ? c[field] : 0;
+            if (i < 0 || i >= (int)fields[field].options.size() || (skipDefault && i == 0)) return "";
+            return Url::EncodeQuery(fields[field].options[i]);
+        };
+        std::string sortBy = option(1, false);
+        for (auto& ch : sortBy) ch = (char)std::tolower((unsigned char)ch);
+        std::string base = pageUrl(consoleUrl.substr(0, consoleUrl.find('?')), 1);
+        return base + "?search=" + Url::EncodeQuery(search) + "&genre=" + option(3, true) + "&region=" + option(0, true) +
+               "&sort_by=" + sortBy + "&order=" + option(2, false);
+    };
     return d;
 }
 }  // namespace

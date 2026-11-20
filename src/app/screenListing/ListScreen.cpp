@@ -11,8 +11,8 @@
 #include "../../utils/include/Theme.h"
 #include "../../utils/include/ImageLoader.h"
 #include "../../catalog/include/Catalog.h"
-#include "../../scraper/Romspedia/include/RomspediaScraperFilter.h"
-#include "../../scraper/Romspedia/include/RomspediaScraper.h"
+#include "../../scraper/Sites.h"
+#include <algorithm>
 
 
 // === Helpers (anonymous namespace) ============================================================
@@ -41,19 +41,15 @@ ListScreen::ListScreen(const std::string& title, const std::string& romSite, con
            const PaginationInfo& paginationInfo)
     : title(title), items(initialItems), onItemSelected1(onSelect), onPageChange(pageChangeCallback), pagination(paginationInfo), romSite(romSite)
 {
-    catalogConsoleUrl = paginationInfo.baseUrl;
-    // Determine site type early
-    if (romSite == "Hexrom") siteType = SiteType::Hexrom;
-    else if (romSite == "Romspedia") siteType = SiteType::Romspedia;
-    else if (romSite == "Global") siteType = SiteType::Global;
-    else siteType = SiteType::Hexrom; // default fallback
-    // Site-specific modal setup
-    if (siteType == SiteType::Global) {
+    consoleUrl = paginationInfo.baseUrl;
+    if (romSite == "Global") {
         global = std::make_unique<GlobalSearchController>([this](const std::vector<ListItem>& results) {
             applyNewResult(results, PaginationInfo(), true);
         });
-    } else if (siteType == SiteType::Romspedia) setupRomspediaModal();
-    else setupHexromModal();
+    } else if ((scraper = Sites::Create(romSite))) {
+        filterForm = std::make_unique<FilterForm>(scraper->definition().filters.fields,
+            [this](const std::string& search, const std::vector<int>& choices) { runSiteFilter(search, choices); });
+    }
     textures.resize(items.size(), nullptr);
     mkdir("cache", 0755);
     mkdir("cache/images", 0755);
@@ -77,24 +73,6 @@ ListScreen::~ListScreen() {
     for (auto& kv : textureByUrl) if (kv.second) owned.insert(kv.second);
     for (auto texture : owned) SDL_DestroyTexture(texture);
     // unique_ptr modals auto-clean
-}
-
-// --- Site-specific modal setup helpers -----------------------------------------------------
-void ListScreen::setupHexromModal() {
-    hexromModal = std::make_unique<HexromFilterModal>();
-    hexromModal->setOnFilter([this](const std::string& search, int region, int sort, int order, int genre){
-        runSiteFilter(search, region, sort, order, genre);
-    });
-}
-
-void ListScreen::setupRomspediaModal() {
-    romspediaModal = std::make_unique<RomspediaFilterModal>();
-    romspediaSearch.clear();
-    romspediaFilterActive = false;
-    romspediaOriginalConsoleUrl = pagination.baseUrl; // Store original console URL for filtering
-    romspediaModal->setOnFilter([this](const std::string& search, int region, int sort, int order, int genre){
-        runSiteFilter(search, region, sort, order, genre);
-    });
 }
 
 void ListScreen::applyNewResult(const std::vector<ListItem>& newItems, const PaginationInfo& newPagination, bool replace) {
@@ -122,96 +100,40 @@ void ListScreen::applyNewResult(const std::vector<ListItem>& newItems, const Pag
     }
 }
 
-void ListScreen::runSiteFilter(const std::string& search, int region, int sort, int order, int genre) {
-    // Catalog: search locally (instant) when it covers this console and no
-    // site-only filters (Hexrom region / sort / order / genre) are set.
-    bool siteOnlyFilters = siteType == SiteType::Hexrom && (region || sort || order || genre);
-    if (!siteOnlyFilters && !catalogConsoleUrl.empty()) {
+// Search & filter (Y dialog): the catalog answers instantly when it covers this
+// console and no site-only filter is chosen; otherwise the site is asked.
+void ListScreen::runSiteFilter(const std::string& search, const std::vector<int>& choices) {
+    const bool hasSearch = search.find_first_not_of(' ') != std::string::npos;
+    const bool siteOnlyChoices = std::any_of(choices.begin(), choices.end(), [](int c) { return c != 0; });
+    filterSearch = search;
+    filterChoices = choices;
+    filterActive = false;
+    if (!siteOnlyChoices && !consoleUrl.empty()) {
         std::vector<ListItem> results;
-        bool covered = search.empty() ? Catalog::Games(romSite, catalogConsoleUrl, results)
-                                      : Catalog::Search(romSite, catalogConsoleUrl, search, results);
+        bool covered = hasSearch ? Catalog::Search(romSite, consoleUrl, search, results)
+                                 : Catalog::Games(romSite, consoleUrl, results);
         if (covered) {
             PaginationInfo local;
-            local.baseUrl = catalogConsoleUrl;
+            local.baseUrl = consoleUrl;
             applyNewResult(results, local, true);
-            if (siteType == SiteType::Romspedia) { romspediaSearch = search; romspediaFilterActive = false; }
-            if (hexromModal) hexromModal->showModal(false);
-            if (romspediaModal) romspediaModal->showModal(false);
             return;
         }
     }
-    if (siteType == SiteType::Romspedia) {
-        romspediaSearch = search;
-        // Always use filter for Romspedia if we're in a specific console (baseUrl contains /roms/console-name)
-        // or if there's a search term
-        bool isConsoleSpecific = pagination.baseUrl.find("/roms/") != std::string::npos && 
-                                pagination.baseUrl.find("romspedia.com/roms") != std::string::npos &&
-                                pagination.baseUrl != "https://www.romspedia.com/roms";
-        romspediaFilterActive = !search.empty() || isConsoleSpecific;
-        
-        if (!search.empty() && isConsoleSpecific) {
-            // Use console-specific filtering
-            std::string searchUrl = "https://www.romspedia.com/search?search_term_string=";
-            auto urlEncode = [](const std::string& value) -> std::string {
-                std::ostringstream escaped;
-                escaped.fill('0');
-                escaped << std::hex;
-                for (char c : value) {
-                    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
-                        escaped << c;
-                    } else if (c == ' ') {
-                        escaped << '+';
-                    } else {
-                        escaped << '%' << std::uppercase << std::setw(2) << int((unsigned char)c) << std::nouppercase;
-                    }
-                }
-                return escaped.str();
-            };
-            searchUrl += urlEncode(search);
-            
-            // Use the original console URL for filtering, not the current pagination.baseUrl
-            std::string filterBaseUrl = romspediaOriginalConsoleUrl.empty() ? pagination.baseUrl : romspediaOriginalConsoleUrl;
-            auto result = RomspediaScraperFilter::filterGames(searchUrl, filterBaseUrl, romspediaSearch, 1);
-            applyNewResult(result.first, result.second, true);
-        } else {
-            // Use the original filter function for non-console specific searches
-            auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, *romspediaModal, romspediaSearch);
-            applyNewResult(result.first, result.second, true);
-        }
-        romspediaModal->showModal(false);
-    } else {
-        auto result = HexromScraperFilter::filterGames(pagination.baseUrl, *hexromModal, search, region, sort, order, genre);
+    if (!scraper) return;
+    if (!hasSearch && !siteOnlyChoices) {   // filter cleared: back to the console's own list
+        auto result = scraper->fetchGames(consoleUrl, 1);
         applyNewResult(result.first, result.second, true);
-        hexromModal->showModal(false);
+        return;
     }
+    filterActive = true;
+    auto result = scraper->filterGames(consoleUrl, search, choices, 1);
+    applyNewResult(result.first, result.second, true);
 }
 
 void ListScreen::runSitePaginate(int page) {
-    if (siteType == SiteType::Romspedia) {
-        // Check if we have a search URL in pagination.baseUrl (this means we're in search mode)
-        bool isSearchUrl = pagination.baseUrl.find("search?search_term_string=") != std::string::npos;
-        if (romspediaFilterActive || isSearchUrl) {
-            // Check if we're filtering within a specific console
-            bool isConsoleSpecific = !romspediaOriginalConsoleUrl.empty() && 
-                                   romspediaOriginalConsoleUrl.find("/roms/") != std::string::npos && 
-                                   romspediaOriginalConsoleUrl.find("romspedia.com/roms") != std::string::npos &&
-                                   romspediaOriginalConsoleUrl != "https://www.romspedia.com/roms";
-            
-            if (isConsoleSpecific && !romspediaSearch.empty()) {
-                // Use console-specific filtering with the original console URL
-                auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, romspediaOriginalConsoleUrl, romspediaSearch, page);
-                applyNewResult(result.first, result.second, page == 1);
-            } else {
-                // Use regular search filtering
-                auto result = RomspediaScraperFilter::filterGames(pagination.baseUrl, *romspediaModal, romspediaSearch, page);
-                applyNewResult(result.first, result.second, page == 1);
-            }
-        } else {
-            RomspediaScraper s; auto result = s.fetchGames(pagination.baseUrl, page);
-            applyNewResult(result.first, result.second, page == 1);
-        }
-    } else { // Hexrom standard pagination (no custom backward implemented yet)
-        HexromScraper s; auto result = s.fetchGames(pagination.baseUrl, page);
+    if (scraper) {
+        auto result = filterActive ? scraper->filterGames(consoleUrl, filterSearch, filterChoices, page)
+                                   : scraper->fetchGames(pagination.baseUrl, page);
         applyNewResult(result.first, result.second, page == 1);
     }
     loadingMore = false;
@@ -517,8 +439,7 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         DrawScrollbar(renderer, SCREEN_W - 22, contentTop, barH, (float)visibleRows / totalRows, pos);
     }
 
-    bool modalVisible = (siteType == SiteType::Hexrom && hexromModal && hexromModal->isVisible()) ||
-                        (siteType == SiteType::Romspedia && romspediaModal && romspediaModal->isVisible());
+    bool modalVisible = filterForm && filterForm->visible();
 
     // ---- Footer (the modal draws its own hints) -----------------------------------
     if (global) {
@@ -534,7 +455,7 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         DrawFooterStatus(renderer, "Loading more…", true);
     } else if (!items.empty()) {
         DrawFooterStatus(renderer, std::to_string(selectedIndex + 1) + " / " + std::to_string(items.size()) +
-                                   (sourceNote.empty() ? "" : "  ·  " + sourceNote));
+                                   (sourceNote.empty() || filterActive ? "" : "  ·  " + sourceNote));  // filter results come from the site
     }
     if (!modalVisible && !global) {
         std::vector<Hint> hints = {{"DPAD", "Navigate"}};
@@ -551,14 +472,8 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         global->renderOverlay(renderer);
     }
 
-    // ---- Filter modal --------------------------------------------------------------
-    if (modalVisible) {
-        DrawScrim(renderer);
-        int modalW = 800, modalH = 472;
-        int modalX = (SCREEN_W - modalW) / 2, modalY = (SCREEN_H - modalH) / 2;
-        if (siteType == SiteType::Hexrom) hexromModal->render(renderer, GetFont(20), modalX, modalY, modalW, modalH);
-        else romspediaModal->render(renderer, GetFont(20), modalX, modalY, modalW, modalH);
-    }
+    // ---- Search & filter dialog ------------------------------------------------------
+    if (modalVisible) filterForm->render(renderer);
 }
 
 void ListScreen::appendItems(const std::vector<ListItem>& newItems, const PaginationInfo& newPagination) {
@@ -654,25 +569,13 @@ void ListScreen::updateAnalogScroll() {
 // --- Input Handling -----------------------------------------------------------------------
 void ListScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
     if (global && global->handleInput(e)) return;
-    // --- Trigger Filter modal only if not in console menu ---
+    // Search & filter dialog: gets all input while open; Y opens it on game lists.
+    if (filterForm && filterForm->visible()) { filterForm->handleInput(e); return; }
     if (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_Y) {
-        bool isConsoleMenu = false;
-        if (title == "Consoles" || title == "Console Menu" || title == "Select Console") isConsoleMenu = true;
-        if (!isConsoleMenu) {
-            if (siteType == SiteType::Hexrom && hexromModal) {
-                hexromModal->showModal(!hexromModal->isVisible());
-            } else if (siteType == SiteType::Romspedia && romspediaModal) {
-                romspediaModal->showModal(!romspediaModal->isVisible());
-            }
-        }
+        bool isConsoleMenu = title == "Consoles";
+        if (!isConsoleMenu && filterForm) filterForm->show(true);
         return;
     }
-
-    // Delegate filter modal input
-    if (siteType == SiteType::Hexrom && hexromModal && hexromModal->isVisible()) {
-        hexromModal->handleInput(e); return; }
-    if (siteType == ListScreen::SiteType::Romspedia && romspediaModal && romspediaModal->isVisible()) {
-        romspediaModal->handleInput(e); return; }
     int currentRow, currentCol;
     getGridPosition(selectedIndex, currentGridColumns, currentRow, currentCol);
     if (e.type == SDL_CONTROLLERBUTTONDOWN) {
@@ -717,7 +620,8 @@ void ListScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
                     int targetPage = pagination.currentPage - 1;
                     if (targetPage < 1) break;
                     {
-                        HexromScraper s; auto result = s.fetchGames(pagination.baseUrl, targetPage);
+                        if (!scraper) return;
+                        auto result = scraper->fetchGames(pagination.baseUrl, targetPage);
                         items = result.first; pagination = result.second;
                         selectedIndex = 0; scrollOffset = 0; textures.clear(); textures.resize(items.size(), nullptr);
                     }

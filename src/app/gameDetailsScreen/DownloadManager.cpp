@@ -257,61 +257,6 @@ std::string DownloadManager::humanReadableSize(long bytes) {
 }
 
 // Static utility methods for scraping
-std::vector<DownloadOption> DownloadManager::scrapeDownloadOptions(const std::string& pageUrl) {
-    std::vector<DownloadOption> result;
-    std::string html = HttpUtils::fetchWebContent(pageUrl);
-    if (html.empty()) return result;
-    
-    // Find the main table with download links
-    std::smatch tableMatch;
-    std::regex tableRe(R"(<table[^>]*>([\s\S]*?)</table>)", std::regex::icase);
-    if (std::regex_search(html, tableMatch, tableRe)) {
-        std::string table = tableMatch[1].str();
-        std::regex rowRe(R"(<tr>([\s\S]*?)</tr>)", std::regex::icase);
-        auto rowsBegin = std::sregex_iterator(table.begin(), table.end(), rowRe);
-        auto rowsEnd = std::sregex_iterator();
-        for (auto it = rowsBegin; it != rowsEnd; ++it) {
-            std::string row = (*it)[1].str();
-            std::smatch linkMatch;
-            std::regex linkRe(R"(<a[^>]+href=["']([^"']+/download/[^"']+)["'][^>]*>([\s\S]*?)</a>)", std::regex::icase);
-            if (std::regex_search(row, linkMatch, linkRe)) {
-                std::string url = linkMatch[1].str();
-                // Only prepend romsfun.com for Romsfun, not Hexrom
-                if (url.find("http") != 0 && url.find("/download/") != std::string::npos) {
-                    url = "https://hexrom.com" + url;
-                }
-                std::string label = StringUtils::cleanHtmlText(linkMatch[2].str());
-                result.push_back({label, url});
-            }
-        }
-    }
-    return result;
-}
-
-std::string DownloadManager::scrapeFinalDownloadLink(const std::string& versionUrl) {
-    std::string html = HttpUtils::fetchWebContent(versionUrl);
-    if (html.empty()) return "";
-    std::smatch linkMatch;
-    std::regex linkRe(R"(<a[^>]+id=["']download["'][^>]+href=["']([^"']+)["'])", std::regex::icase);
-    if (std::regex_search(html, linkMatch, linkRe)) {
-        return linkMatch[1].str();
-    }
-    return "";
-}
-
-void DownloadManager::downloadFileToDisk(const std::string& url, const std::string& outPath) {
-    char cwd[PATH_MAX];
-    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-        // Could log cwd if needed
-    }
-    std::string data = HttpUtils::fetchWebContent(url);
-    if (!data.empty()) {
-        std::ofstream out(outPath, std::ios::binary);
-        out.write(data.data(), data.size());
-        out.close();
-    }
-}
-
 long DownloadManager::getRemoteFileSize(const std::string& url) {
     std::string headers;
     if (Process::Run({"curl", "--globoff", "--cacert", "/etc/ssl/certs/ca-certificates.crt", "-sI", "--", url}, &headers) != 0) return -1;

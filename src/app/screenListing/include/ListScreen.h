@@ -24,10 +24,8 @@
 #include "../../../model/ListItem.h"
 #include "../../../model/PaginationInfo.h"
 #include "../../../utils/include/HttpUtils.h"   
-#include "../../../scraper/Hexrom/include/HexromFilterModal.h"
-#include "../../../scraper/Hexrom/include/HexromScraperFilter.h"
-#include "../../../scraper/Romspedia/include/RomspediaFilterModal.h"
-#include "../../../scraper/Hexrom/include/HexromScraper.h"
+#include "../../../scraper/engine/DefinedScraper.h"
+#include "FilterForm.h"
 #include "../../../utils/include/StringUtils.h"
 #include "../../../utils/include/UiUtils.h"
 #include "../../menuApp/include/MenuSystem.h"
@@ -40,7 +38,6 @@ public:
     SDL_Renderer* renderer;
 private:
     std::string title;
-    std::string lastFilterUrl;
     std::vector<ListItem> items;
     std::vector<SDL_Texture*> textures;
     int selectedIndex = 0;
@@ -97,20 +94,17 @@ private:
 
     Mix_Chunk* moveSound = nullptr;
 
-    // --- Filter modal UI (site specific via union-style void*) ---
-    enum class SiteType { Hexrom, Romspedia, Global };
-    SiteType siteType;
-    // Own concrete modals (no abstraction layer/adapters)
-    std::unique_ptr<HexromFilterModal> hexromModal;
-    std::unique_ptr<RomspediaFilterModal> romspediaModal;
+    // The site this list belongs to (null for global search), and its
+    // search & filter dialog (Y) with the last search/choices applied.
+    std::shared_ptr<DefinedScraper> scraper;
+    std::unique_ptr<FilterForm> filterForm;
+    std::string filterSearch;
+    std::vector<int> filterChoices;
+    bool filterActive = false;            // the list currently shows filter results from the site
     // Global search across all sites (romSite == "Global")
     std::unique_ptr<GlobalSearchController> global;
-    // Shared filter state (Hexrom uses indices in its modal already)
-    std::string romspediaSearch;
     std::string sourceNote;
-    std::string catalogConsoleUrl;   // console this list came from, for local (catalog) search
-    bool romspediaFilterActive = false;
-    std::string romspediaOriginalConsoleUrl; // Store original console URL for filtering
+    std::string consoleUrl;               // console this list came from
 
     // --- On-screen keyboard integration ---
     bool showOnscreenKeyboard = false;
@@ -162,9 +156,7 @@ public:
 
 private:
     // Split out bulky constructor site-specific code for readability
-    void setupHexromModal();
-    void setupRomspediaModal();
-    void runSiteFilter(const std::string& search, int region, int sort, int order, int genre);
+    void runSiteFilter(const std::string& search, const std::vector<int>& choices);
     void runSitePaginate(int page);
     void applyNewResult(const std::vector<ListItem>& newItems, const PaginationInfo& newPagination, bool replace = true);
 };

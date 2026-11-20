@@ -46,6 +46,22 @@ struct DownloadRules {
     Picks link;
 };
 
+// Search & filter for one console's games (the Y dialog on a game list).
+struct FilterField {
+    std::string label;                  // "Region"
+    std::vector<std::string> options;   // options[0] is the default ("any")
+};
+struct FilterRules {
+    std::vector<FilterField> fields;    // dropdowns under the search box
+    // URL listing a console's games that match `search` and the chosen options
+    // (one index per field).
+    std::function<std::string(const std::string& consoleUrl, const std::string& search,
+                              const std::vector<int>& choices)> url;
+    // The site's search covers every console (Romspedia): results are kept
+    // when their URL is under the console's path, and shown 15 per page.
+    bool siteWideSearch = false;
+};
+
 struct SiteDefinition {
     std::string id;         // "Hexrom"; also the blacklist section name
     std::string baseUrl;    // scheme + host, for relative links
@@ -61,6 +77,7 @@ struct SiteDefinition {
 
     DetailRules details;
     DownloadRules download;
+    FilterRules filters;
 
     // Hexrom has always been checked against the whole blacklist file.
     bool blacklistUsesWholeFile = false;

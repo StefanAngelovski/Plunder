@@ -170,6 +170,36 @@ GameDetails DefinedScraper::fetchGameDetails(const std::string& gameUrl) {
     return d;
 }
 
+std::pair<std::vector<ListItem>, PaginationInfo> DefinedScraper::filterGames(
+    const std::string& consoleUrl, const std::string& search, const std::vector<int>& choices, int page) {
+    const FilterRules& f = def_.filters;
+    std::string url = f.url ? f.url(consoleUrl, search, choices) : consoleUrl;
+    if (!f.siteWideSearch) return fetchGames(url, page);
+
+    // Site-wide search narrowed to one console: keep results under the console's
+    // path (…/roms/gameboy-advance/…), fetching search pages until there are enough.
+    const size_t kPerPage = 15;
+    const int kMaxSearchPages = 20;
+    PaginationInfo pagination;
+    pagination.baseUrl = url;
+    pagination.currentPage = page;
+    std::string path = consoleUrl.substr(std::min(consoleUrl.size(), def_.baseUrl.size()));
+    if (path.empty() || path.back() != '/') path += '/';
+    std::vector<ListItem> matches;
+    for (int p = 1; p <= kMaxSearchPages && matches.size() < (size_t)page * kPerPage; ++p) {
+        std::vector<ListItem> results = fetchGames(url, p).first;
+        if (results.empty()) break;
+        for (auto& g : results)
+            if (g.downloadUrl.find(path) != std::string::npos) matches.push_back(g);
+    }
+    size_t start = (size_t)(page - 1) * kPerPage;
+    std::vector<ListItem> games;
+    if (start < matches.size())
+        games.assign(matches.begin() + start, matches.begin() + std::min(matches.size(), start + kPerPage));
+    pagination.totalPages = (int)((matches.size() + kPerPage - 1) / kPerPage);
+    return {games, pagination};
+}
+
 std::vector<ListItem> DefinedScraper::search(const std::string& query) {
     if (!def_.searchUrl) return {};
     std::string html = HttpUtils::fetchWebContent(def_.searchUrl(query));

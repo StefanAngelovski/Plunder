@@ -21,6 +21,10 @@ public:
     std::pair<std::vector<ListItem>, PaginationInfo> fetchGames(const std::string& url, int page = 1) override;
     GameDetails fetchGameDetails(const std::string& gameUrl) override;
 
+    // A console's games matching a search and filter choices (see FilterRules).
+    std::pair<std::vector<ListItem>, PaginationInfo> filterGames(const std::string& consoleUrl, const std::string& search,
+                                                                 const std::vector<int>& choices, int page = 1);
+
     // The site's own search (first page). ListItem::console holds each game's
     // console label when the site shows it.
     std::vector<ListItem> search(const std::string& query);

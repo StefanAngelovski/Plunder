@@ -61,6 +61,12 @@ SiteDefinition romspedia() {
         return url;
     };
     d.download.link = {{kArchiveLinks, "href"}};
+
+    // Filters: no dropdowns; the site-wide search, narrowed to the console.
+    d.filters.url = [](const std::string&, const std::string& search, const std::vector<int>&) {
+        return "https://www.romspedia.com/search?" + kSearchParam + Url::EncodeQuery(search);
+    };
+    d.filters.siteWideSearch = true;
     return d;
 }
 }  // namespace
