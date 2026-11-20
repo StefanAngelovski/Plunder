@@ -14,6 +14,8 @@ Preview a release body locally with `scripts/release-notes.sh X.Y.Z`.
 
 ## Unreleased
 
+## v2.4.0
+
 ### Improvements in this update
 - Game catalog: consoles and complete game lists now open instantly, and searching within a console is instant too. Plunder downloads a pre-built catalog of every game (updated daily) in the background and falls back to the live sites when needed.
 - Faster page loading: Plunder is now built with compiler optimisations, so it processes site pages about 3–5× faster on the device.
