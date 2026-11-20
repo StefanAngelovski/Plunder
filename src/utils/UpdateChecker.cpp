@@ -1,5 +1,6 @@
 #include "include/UpdateChecker.h"
 #include "include/HttpUtils.h"
+#include "include/Process.h"
 #include "../Version.h"
 #include <iostream>
 #include <fstream>
@@ -173,29 +174,18 @@ UpdateInfo UpdateChecker::checkForUpdates() {
     // Fetch latest release info from GitHub API
     std::string apiUrl = PLUNDER_GITHUB_API_URL;
     
-    // Use curl with Accept header for GitHub API
-    std::string command = "curl --globoff --cacert /etc/ssl/certs/ca-certificates.crt "
-                          "-H \"Accept: application/vnd.github.v3+json\" "
-                          "-H \"User-Agent: Plunder-Updater\" "
-                          "--max-time 15 -fsSL \"" + apiUrl + "\"";
-    
+    // GitHub API request (curl run directly, no shell)
     std::string json;
-    FILE* pipe = popen(command.c_str(), "r");
-    if (pipe) {
-        char buffer[256];
-        while (!feof(pipe)) {
-            if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-                json += buffer;
-            }
-        }
-        int status = pclose(pipe);
-        if (status != 0) {
-            info.errorMessage = "Failed to connect to GitHub API";
-            std::cerr << "[UpdateChecker] API request failed with status: " << status << std::endl;
-            return info;
-        }
-    } else {
+    int status = Process::Run({"curl", "--globoff", "--cacert", "/etc/ssl/certs/ca-certificates.crt",
+                               "-H", "Accept: application/vnd.github.v3+json", "-H", "User-Agent: Plunder-Updater",
+                               "--max-time", "15", "-fsSL", "--", apiUrl}, &json);
+    if (status < 0) {
         info.errorMessage = "Failed to execute curl";
+        return info;
+    }
+    if (status != 0) {
+        info.errorMessage = "Failed to connect to GitHub API";
+        std::cerr << "[UpdateChecker] API request failed with status: " << status << std::endl;
         return info;
     }
     

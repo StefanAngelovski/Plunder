@@ -1,81 +1,50 @@
 #include "include/HttpUtils.h"
+#include "include/Process.h"
 
+// All requests run curl (wget as a fallback) directly via Process::Run, with
+// the URL as a separate argument: never through a shell, so URLs scraped from
+// websites can't inject commands.
 namespace HttpUtils {
-    std::string fetchWebContent(const std::string& url) {
-        std::string result;
-        std::string command = "curl --globoff --cacert /etc/ssl/certs/ca-certificates.crt --max-time 15 -fsSL \"" + url + "\"";
-        FILE* pipe = popen(command.c_str(), "r");
-        if (pipe) {
-            char buffer[128];
-            while (!feof(pipe)) {
-                if (fgets(buffer, 128, pipe) != nullptr) result += buffer;
-            }
-            int status = pclose(pipe);
-        }
-        if (result.empty()) {
-            command = "wget --timeout=15 -q -O - \"" + url + "\"";
-            pipe = popen(command.c_str(), "r");
-            if (pipe) {
-                char buffer[128];
-                while (!feof(pipe)) {
-                    if (fgets(buffer, 128, pipe) != nullptr) result += buffer;
-                }
-                int status = pclose(pipe);
-            }
-        }
-        return result;
-    }
 
-    bool downloadImage(const std::string& url, const std::string& outputPath) {
-        std::string command = "curl --globoff --cacert /etc/ssl/certs/ca-certificates.crt -fsSL -o \"" + outputPath + "\" \"" + url + "\"";
-        int ret = system(command.c_str());
-        if (ret != 0) {
-            command = "wget --timeout=60 -q -O \"" + outputPath + "\" \"" + url + "\"";
-            ret = system(command.c_str());
-        }
-        return ret == 0;
-    }
+namespace {
+const char* kCaBundle = "/etc/ssl/certs/ca-certificates.crt";
 
-    // Use downloadImage for downloadFile
-    bool downloadFile(const std::string& url, const std::string& outputPath) {
-        return downloadImage(url, outputPath);
-    }
+bool fetchTo(const std::string& url, std::string* body, const std::string* outPath, int timeoutSecs) {
+    std::vector<std::string> curl = {"curl", "--globoff", "--cacert", kCaBundle, "-fsSL"};
+    if (timeoutSecs > 0) { curl.push_back("--max-time"); curl.push_back(std::to_string(timeoutSecs)); }
+    if (outPath) { curl.push_back("-o"); curl.push_back(*outPath); }
+    curl.push_back("--");
+    curl.push_back(url);
+    if (Process::Run(curl, body) == 0 && (outPath || !body->empty())) return true;
 
-    bool hasInternet() {
-        std::string url = "https://www.google.com/generate_204";
-        std::string command = "curl --globoff --cacert /etc/ssl/certs/ca-certificates.crt --max-time 15 -fsSL \"" + url + "\"";
-    // Reduced logging noise
-        FILE* pipe = popen(command.c_str(), "r");
-        std::string data;
-        int curl_status = -1;
-        if (pipe) {
-            char buffer[128];
-            while (!feof(pipe)) {
-                if (fgets(buffer, 128, pipe) != nullptr) data += buffer;
-            }
-            curl_status = pclose(pipe);
-            // Debug suppressed
-        }
-    // Suppress data size log
-        if (curl_status == 0) {
-            // Success, even if data is empty (204 response)
-            return true;
-        }
-        // Fallback to wget
-        std::string fallback = "wget --timeout=15 -q -O - \"" + url + "\"";
-    // Suppress fallback log
-        pipe = popen(fallback.c_str(), "r");
-        int wget_status = -1;
-        data.clear();
-        if (pipe) {
-            char buffer[128];
-            while (!feof(pipe)) {
-                if (fgets(buffer, 128, pipe) != nullptr) data += buffer;
-            }
-            wget_status = pclose(pipe);
-            // Suppress wget exit status log
-        }
-    // Suppress data size after wget log
-        return wget_status == 0;
-    }
+    // Fallback: wget (some firmwares ship an older curl without our CA bundle).
+    if (body) body->clear();
+    std::vector<std::string> wget = {"wget", "-q", "--timeout=" + std::to_string(timeoutSecs > 0 ? timeoutSecs : 60),
+                                     "-O", outPath ? *outPath : "-", "--", url};
+    return Process::Run(wget, body) == 0 && (outPath || !body->empty());
 }
+}  // namespace
+
+std::string fetchWebContent(const std::string& url) {
+    std::string body;
+    fetchTo(url, &body, nullptr, 15);
+    return body;
+}
+
+bool downloadImage(const std::string& url, const std::string& outputPath) {
+    return fetchTo(url, nullptr, &outputPath, 0);
+}
+
+bool downloadFile(const std::string& url, const std::string& outputPath) {
+    return downloadImage(url, outputPath);
+}
+
+bool hasInternet() {
+    // generate_204 answers with an empty body: success = the tool exits cleanly.
+    const std::string url = "https://www.google.com/generate_204";
+    std::string ignored;
+    if (Process::Run({"curl", "--globoff", "--cacert", kCaBundle, "-fsS", "--max-time", "15", "--", url}, &ignored) == 0) return true;
+    return Process::Run({"wget", "-q", "--timeout=15", "-O", "-", "--", url}, &ignored) == 0;
+}
+
+}  // namespace HttpUtils

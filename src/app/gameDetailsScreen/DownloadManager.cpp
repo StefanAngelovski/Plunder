@@ -1,4 +1,5 @@
 #include "include/DownloadManager.h"
+#include "../../utils/include/Process.h"
 
 DownloadManager::DownloadManager() {
     // Initialize state
@@ -163,20 +164,18 @@ void DownloadManager::downloadWorker(const std::string& url, const std::string& 
                     // Try bundled 7z first (handles ZIP, RAR, 7z, etc.)
                     struct stat st7z;
                     if (stat(bundled7z.c_str(), &st7z) == 0) {
-                        std::string cmd = bundled7z + " x -y \"" + outPath + "\" -o\"" + tmpDir + "\" >/dev/null 2>&1";
-                        ret = system(cmd.c_str());
+                        ret = Process::Run({bundled7z, "x", "-y", outPath, "-o" + tmpDir}, nullptr, true);
                         printf("[Download] Bundled 7z extraction: ret=%d\n", ret);
                     }
                     
                     // Fallback to system 7z if bundled not found
                     if (ret != 0) {
-                        auto cmdExists = [](const char* c){ return system((std::string("command -v ") + c + " >/dev/null 2>&1").c_str()) == 0; };
-                        if (cmdExists("7z")) {
-                            ret = system((std::string("7z x -y \"") + outPath + "\" -o\"" + tmpDir + "\" >/dev/null 2>&1").c_str());
+                        if (Process::Exists("7z")) {
+                            ret = Process::Run({"7z", "x", "-y", outPath, "-o" + tmpDir}, nullptr, true);
                             printf("[Download] System 7z extraction: ret=%d\n", ret);
-                        } else if (cmdExists("unzip")) {
+                        } else if (Process::Exists("unzip")) {
                             // Last resort: unzip (ZIP only)
-                            ret = system((std::string("unzip -o \"") + outPath + "\" -d \"" + tmpDir + "\" >/dev/null 2>&1").c_str());
+                            ret = Process::Run({"unzip", "-o", outPath, "-d", tmpDir}, nullptr, true);
                             printf("[Download] Fallback unzip extraction: ret=%d\n", ret);
                         }
                     }
@@ -314,14 +313,11 @@ void DownloadManager::downloadFileToDisk(const std::string& url, const std::stri
 }
 
 long DownloadManager::getRemoteFileSize(const std::string& url) {
-    std::string command = "curl --cacert /etc/ssl/certs/ca-certificates.crt -sI \"" + url + "\"";
-    FILE* pipe = popen(command.c_str(), "r");
-    if (!pipe) return -1;
-    
-    char buffer[256];
+    std::string headers;
+    if (Process::Run({"curl", "--globoff", "--cacert", "/etc/ssl/certs/ca-certificates.crt", "-sI", "--", url}, &headers) != 0) return -1;
+    std::istringstream lines(headers);
     long size = -1;
-    while (fgets(buffer, sizeof(buffer), pipe)) {
-        std::string line(buffer);
+    for (std::string line; std::getline(lines, line);) {
         // Make case-insensitive and trim whitespace
         std::string lowerLine = line;
         std::transform(lowerLine.begin(), lowerLine.end(), lowerLine.begin(), ::tolower);
@@ -338,6 +334,5 @@ long DownloadManager::getRemoteFileSize(const std::string& url) {
             break;
         }
     }
-    pclose(pipe);
     return size;
 }

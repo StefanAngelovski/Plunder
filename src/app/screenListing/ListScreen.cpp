@@ -55,7 +55,8 @@ ListScreen::ListScreen(const std::string& title, const std::string& romSite, con
     } else if (siteType == SiteType::Romspedia) setupRomspediaModal();
     else setupHexromModal();
     textures.resize(items.size(), nullptr);
-    system("mkdir -p cache/images");
+    mkdir("cache", 0755);
+    mkdir("cache/images", 0755);
     queueInitialDownloads();
     startImageLoaderThreads(renderer);
     moveSound = Mix_LoadWAV("sounds/move.wav");

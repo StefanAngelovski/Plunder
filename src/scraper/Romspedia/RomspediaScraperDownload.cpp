@@ -1,4 +1,5 @@
 #include "include/RomspediaScraperDownload.h"
+#include "../../utils/include/Process.h"
 
 RomspediaScraperDownload::RomspediaScraperDownload() {}
 void RomspediaScraperDownload::download(const std::string&) {}
@@ -96,21 +97,18 @@ bool downloadAndExtractRomspediaZip(const std::string& downloadUrl, const std::s
         struct stat st7z;
         
         if (stat(bundled7z.c_str(), &st7z) == 0) {
-            std::string cmd = bundled7z + " x -y -o'" + basePath + "' '" + archivePath + "'";
-            printf("[RomspediaDownload] Extracting with bundled 7z: %s\n", cmd.c_str());
-            ret = system(cmd.c_str());
+            printf("[RomspediaDownload] Extracting with bundled 7z: %s\n", archivePath.c_str());
+            ret = Process::Run({bundled7z, "x", "-y", "-o" + basePath, archivePath});
         }
         
         // Fallback to system extractors if bundled 7z not found
         if (ret != 0) {
             if (ext == ".zip") {
-                std::string unzipCmd = "unzip -o '" + archivePath + "' -d '" + basePath + "'";
-                printf("[RomspediaDownload] Fallback unzip: %s\n", unzipCmd.c_str());
-                ret = system(unzipCmd.c_str());
+                printf("[RomspediaDownload] Fallback unzip: %s\n", archivePath.c_str());
+                ret = Process::Run({"unzip", "-o", archivePath, "-d", basePath});
             } else {
-                std::string sevenzCmd = "7z x -y -o'" + basePath + "' '" + archivePath + "'";
-                printf("[RomspediaDownload] Fallback 7z: %s\n", sevenzCmd.c_str());
-                ret = system(sevenzCmd.c_str());
+                printf("[RomspediaDownload] Fallback 7z: %s\n", archivePath.c_str());
+                ret = Process::Run({"7z", "x", "-y", "-o" + basePath, archivePath});
             }
         }
         
