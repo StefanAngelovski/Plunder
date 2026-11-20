@@ -1,6 +1,7 @@
 #include "include/MenuApplication.h"
 #include "../../utils/include/Theme.h"
 #include "../../Version.h"
+#include "../../catalog/include/Catalog.h"
 #include <regex>
 
 // ===================== Internal helper structs & constants ===================== //
@@ -44,6 +45,8 @@ bool MenuApplication::initialize() {
     
     // Start background update check
     UpdateChecker::checkForUpdatesAsync();
+    // Load the saved game catalog and refresh it from GitHub in the background
+    Catalog::StartBackgroundRefresh();
     
     running = true;
     return true;
@@ -119,6 +122,7 @@ void MenuApplication::handleConsolesLoaded(std::vector<ListItem>* consolesPtr) {
         nullptr,
         PaginationInfo()
     );
+    if (!Catalog::Consoles(currentSite).empty()) listScreen->setSourceNote(Catalog::AgeText());
     menuSystem->popScreen();
     menuSystem->pushScreen(listScreen);
     delete consolesPtr;
@@ -162,6 +166,7 @@ void MenuApplication::handleGamesLoaded(GameListData* gameData) {
         fetchGameDetailsAsync(game, iconTexture, currentConsoleName);
     };
     newListScreen->setTallGridMode(true);
+    if (gameData->fromCatalog) newListScreen->setSourceNote(Catalog::AgeText());
     menuSystem->popScreen();
     menuSystem->pushScreen(newListScreen);
     delete gameData;
@@ -201,7 +206,10 @@ void MenuApplication::fetchConsolesAsync() {
     std::thread([this]() {
         int idx = currentSiteIndex;
         auto scraper = (idx >= 0 && idx < (int)siteRegistry.size()) ? siteRegistry[idx].scraper : nullptr;
-        auto consoles = scraper ? scraper->fetchConsoles() : std::vector<ListItem>();
+        std::string siteId = (idx >= 0 && idx < (int)siteRegistry.size()) ? siteRegistry[idx].id : "";
+        // Catalog first (instant); live scraping if the catalog doesn't cover this site.
+        auto consoles = Catalog::Consoles(siteId);
+        if (consoles.empty() && scraper) consoles = scraper->fetchConsoles();
         SDL_Event event; SDL_zero(event);
         event.type = SDL_USEREVENT; event.user.code = EVENT_CONSOLES_LOADED; event.user.data1 = new std::vector<ListItem>(consoles);
         SDL_PushEvent(&event);
@@ -211,11 +219,21 @@ void MenuApplication::fetchConsolesAsync() {
 
 void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool showLoadingScreen) {
     std::thread([this, baseUrl, page]() {
-        auto scraper = currentScraper();
-        auto result = scraper ? scraper->fetchGames(baseUrl, page) : std::make_pair(std::vector<ListItem>(), PaginationInfo());
         GameListData* gameData = new GameListData();
-        gameData->games = result.first;
-        gameData->pagination = result.second;
+        std::vector<ListItem> catalogGames;
+        if (page == 1 && Catalog::Games(currentSite, baseUrl, catalogGames)) {
+            // Whole console from the catalog: every game at once, no paging.
+            gameData->games = std::move(catalogGames);
+            gameData->pagination.currentPage = 1;
+            gameData->pagination.totalPages = 1;
+            gameData->pagination.baseUrl = baseUrl;
+            gameData->fromCatalog = true;
+        } else {
+            auto scraper = currentScraper();
+            auto result = scraper ? scraper->fetchGames(baseUrl, page) : std::make_pair(std::vector<ListItem>(), PaginationInfo());
+            gameData->games = result.first;
+            gameData->pagination = result.second;
+        }
         // Console label without its trailing game count, e.g. "GBA ROMs (1963)" -> "GBA ROMs"
         gameData->title = std::regex_replace(currentConsoleName, std::regex(R"(\s*\(\d+\)\s*$)"), "");
         if (gameData->title.empty()) gameData->title = "Games";

@@ -7,6 +7,8 @@
 
 #include "include/ListScreen.h"  
 #include "../../utils/include/Theme.h"
+#include "../../utils/include/ImageLoader.h"
+#include "../../catalog/include/Catalog.h"
 #include "../../scraper/Romspedia/include/RomspediaScraperFilter.h"
 #include "../../scraper/Romspedia/include/RomspediaScraper.h"
 
@@ -37,6 +39,7 @@ ListScreen::ListScreen(const std::string& title, const std::string& romSite, con
            const PaginationInfo& paginationInfo)
     : title(title), items(initialItems), onItemSelected1(onSelect), onPageChange(pageChangeCallback), pagination(paginationInfo), romSite(romSite)
 {
+    catalogConsoleUrl = paginationInfo.baseUrl;
     // Determine site type early
     if (romSite == "Hexrom") siteType = SiteType::Hexrom;
     else if (romSite == "Romspedia") siteType = SiteType::Romspedia;
@@ -102,6 +105,23 @@ void ListScreen::applyNewResult(const std::vector<ListItem>& newItems, const Pag
 }
 
 void ListScreen::runSiteFilter(const std::string& search, int region, int sort, int order, int genre) {
+    // Catalog: search locally (instant) when it covers this console and no
+    // site-only filters (Hexrom region / sort / order / genre) are set.
+    bool siteOnlyFilters = siteType == SiteType::Hexrom && (region || sort || order || genre);
+    if (!siteOnlyFilters && !catalogConsoleUrl.empty()) {
+        std::vector<ListItem> results;
+        bool covered = search.empty() ? Catalog::Games(romSite, catalogConsoleUrl, results)
+                                      : Catalog::Search(romSite, catalogConsoleUrl, search, results);
+        if (covered) {
+            PaginationInfo local;
+            local.baseUrl = catalogConsoleUrl;
+            applyNewResult(results, local, true);
+            if (siteType == SiteType::Romspedia) { romspediaSearch = search; romspediaFilterActive = false; }
+            if (hexromModal) hexromModal->showModal(false);
+            if (romspediaModal) romspediaModal->showModal(false);
+            return;
+        }
+    }
     if (siteType == SiteType::Romspedia) {
         romspediaSearch = search;
         // Always use filter for Romspedia if we're in a specific console (baseUrl contains /roms/console-name)
@@ -241,16 +261,7 @@ void ListScreen::updateTextures(SDL_Renderer* renderer) {
         std::string path = tmp.second;
         readyImages.pop();
         if (idx >= 0 && idx < items.size() && idx < textures.size() && !textures[idx]) {
-            SDL_Surface* surface = nullptr;
-            if (path.size() > 5 && path.substr(path.size() - 5) == ".webp") {
-                SDL_RWops* rw = SDL_RWFromFile(path.c_str(), "rb");
-                if (rw) {
-                    surface = IMG_LoadWEBP_RW(rw);
-                    SDL_RWclose(rw);
-                }
-            } else {
-                surface = IMG_Load(path.c_str());
-            }
+            SDL_Surface* surface = ImageLoader::Load(path);  // WebP decoded by bundled libwebp
             if (surface) {
                 textures[idx] = SDL_CreateTextureFromSurface(renderer, surface);
                 SDL_FreeSurface(surface);
@@ -274,7 +285,7 @@ void ListScreen::loadTexture(SDL_Renderer* renderer, int index) {
         std::ifstream file(filename);
         if (file.good()) {
             file.close();
-            SDL_Surface* surface = IMG_Load(filename.c_str());
+            SDL_Surface* surface = ImageLoader::Load(filename);
             if (surface) {
                 textures[index] = SDL_CreateTextureFromSurface(renderer, surface);
                 SDL_FreeSurface(surface);
@@ -292,7 +303,7 @@ void ListScreen::loadTexture(SDL_Renderer* renderer, int index) {
     std::ifstream fileLocal(items[index].imagePath);
     if (fileLocal.good()) {
         fileLocal.close();
-        SDL_Surface* surface = IMG_Load(items[index].imagePath.c_str());
+        SDL_Surface* surface = ImageLoader::Load(items[index].imagePath);
         if (surface) {
             textures[index] = SDL_CreateTextureFromSurface(renderer, surface);
             SDL_FreeSurface(surface);
@@ -462,7 +473,8 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
     } else if (loadingMore) {
         DrawFooterStatus(renderer, "Loading more…", true);
     } else if (!items.empty()) {
-        DrawFooterStatus(renderer, std::to_string(selectedIndex + 1) + " / " + std::to_string(items.size()));
+        DrawFooterStatus(renderer, std::to_string(selectedIndex + 1) + " / " + std::to_string(items.size()) +
+                                   (sourceNote.empty() ? "" : "  ·  " + sourceNote));
     }
     if (!modalVisible) {
         std::vector<Hint> hints = {{"DPAD", "Navigate"}};

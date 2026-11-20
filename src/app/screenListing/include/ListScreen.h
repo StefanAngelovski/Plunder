@@ -99,6 +99,8 @@ private:
     std::unique_ptr<RomspediaFilterModal> romspediaModal;
     // Shared filter state (Hexrom uses indices in its modal already)
     std::string romspediaSearch;
+    std::string sourceNote;
+    std::string catalogConsoleUrl;   // console this list came from, for local (catalog) search
     bool romspediaFilterActive = false;
     std::string romspediaOriginalConsoleUrl; // Store original console URL for filtering
 
@@ -135,6 +137,9 @@ public:
     void appendItems(const std::vector<ListItem>& newItems, const PaginationInfo& newPagination);
 
     void setLoadingMore(bool loading) { loadingMore = loading; }
+
+    // Shown in the footer, e.g. "catalog updated 3 h ago".
+    void setSourceNote(const std::string& note) { sourceNote = note; }
 
     // Add a helper to determine if this is a game listing screen
     bool isGameListingScreen() const {

@@ -1,0 +1,94 @@
+# Builds the pre-made game catalog the app downloads for instant browsing and search.
+#
+# Daily (and on demand), crawls every console of the supported ROM sites with
+# the app's own scraper code (tools/catalog/crawler.cpp), then publishes
+# catalog.tsv.gz + catalog.json to the `catalog` branch as a single commit
+# (force-pushed, so the branch never grows). The app reads them from
+# https://raw.githubusercontent.com/<repo>/catalog/ (see PLUNDER_CATALOG_BASE_URL).
+#
+# Safety: consoles that fail to crawl keep their previous entries, and a
+# catalog that shrinks by more than 20% overall is not published.
+name: Catalog
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # daily, 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libsdl2-dev libsdl2-ttf-dev
+
+      - name: Build crawler
+        run: tools/catalog/build.sh crawler
+
+      - name: Fetch previous catalog
+        run: |
+          if curl -fsSL -o previous.tsv.gz "https://raw.githubusercontent.com/${{ github.repository }}/catalog/catalog.tsv.gz"; then
+            gunzip previous.tsv.gz
+            echo "previous: $(grep -c '^G' previous.tsv) games"
+          else
+            echo "no previous catalog (first run)"
+          fi
+
+      - name: Crawl
+        run: |
+          ws="$GITHUB_WORKSPACE"
+          args=("$ws/catalog.tsv" --jobs 4)
+          [ -f "$ws/previous.tsv" ] && args+=(--previous "$ws/previous.tsv")
+          # The scrapers read res/blacklist.txt relative to the working directory, like the app.
+          mkdir -p run && cp -r res run/
+          (cd run && "$ws/crawler" "${args[@]}" > "$ws/summary.txt" 2> "$ws/crawl.log") || { tail -40 crawl.log; exit 1; }
+          {
+            echo '### Catalog crawl'
+            echo '```'
+            grep -vE '^\[|^curl: \(22\)' crawl.log | tail -150
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat summary.txt
+
+      - name: Sanity check
+        run: |
+          new=$(grep -c '^G' catalog.tsv || true)
+          old=0; [ -f previous.tsv ] && old=$(grep -c '^G' previous.tsv || true)
+          echo "games: previous=$old new=$new"
+          if [ "$new" -eq 0 ] || [ "$new" -lt $(( old * 8 / 10 )) ]; then
+            echo "::error::Catalog shrank too much ($old -> $new games); not publishing."
+            exit 1
+          fi
+
+      - name: Package
+        run: |
+          mkdir out
+          gzip -9 -n -c catalog.tsv > out/catalog.tsv.gz
+          sha=$(sha256sum out/catalog.tsv.gz | cut -d' ' -f1)
+          bytes=$(stat -c %s out/catalog.tsv.gz)
+          games=$(grep -c '^G' catalog.tsv); consoles=$(grep -c '^C' catalog.tsv)
+          generated=$(head -1 catalog.tsv | cut -f3)
+          printf '{"format":1,"generated":"%s","sha256":"%s","bytes":%s,"consoles":%s,"games":%s}\n' \
+            "$generated" "$sha" "$bytes" "$consoles" "$games" > out/catalog.json
+          cat out/catalog.json
+
+      - name: Publish to the catalog branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd out
+          git init -q -b catalog
+          git add catalog.tsv.gz catalog.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Catalog $(date -u +%Y-%m-%d)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" catalog

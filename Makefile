@@ -8,20 +8,41 @@ OUT = $(BUILD_DIR)/$(APP_LABEL_SLUG)
 TOOLCHAIN_DIR = /sdk/aarch64-linux-gnu-7.5.0-linaro
 SYSROOT_DIR = /sdk/usr
 SDL_DIR = /sdk/SDL2-2.26.1
+# libwebp decoder built by the Dockerfile; linked statically (no runtime dependency)
+WEBP_DIR = /sdk/webp
 
 # Compiler Setup
 CXX = $(TOOLCHAIN_DIR)/bin/aarch64-linux-gnu-g++
-CXXFLAGS = -I$(SDL_DIR)/include -I$(SYSROOT_DIR)/include -I.
+# -O2: optimised build so the app runs as fast as possible on the handheld
+CXXFLAGS = -O2 -I$(SDL_DIR)/include -I$(SYSROOT_DIR)/include -I$(WEBP_DIR)/include -I.
 LDFLAGS = -L$(SYSROOT_DIR)/lib -L$(SYSROOT_DIR)/lib/mali -Wl,-rpath-link=$(SYSROOT_DIR)/lib/mali
-LIBS = -lSDL2 -lSDL2_ttf -lSDL2_image -lSDL2_mixer -lmad -lfreetype -lz -lbz2 -lGLESv2 -lEGL -lIMGegl -lsrv_um -lusc -lglslcompiler -lm -lpthread -ljson-c
+LIBS = $(WEBP_DIR)/lib/libwebpdecoder.a -lSDL2 -lSDL2_ttf -lSDL2_image -lSDL2_mixer -lmad -lfreetype -lz -lbz2 -lGLESv2 -lEGL -lIMGegl -lsrv_um -lusc -lglslcompiler -lm -lpthread -ljson-c
 
 SRC = $(shell find src -name '*.cpp')
 
+# Incremental, parallel build: one object per source file in build/obj (kept out
+# of build/Plunder, which is what ships). -MMD -MP records header dependencies,
+# so editing a .h recompiles exactly the files that include it.
+OBJ_DIR = build/obj
+OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)
+DEP = $(OBJ:.o=.d)
+
+# Use every core by default; override with e.g. `make -j2`.
+ifeq ($(filter -j%,$(MAKEFLAGS)),)
+MAKEFLAGS += -j$(shell nproc 2>/dev/null || echo 2)
+endif
+
 all: $(OUT) copy_resources
 
-$(OUT): $(SRC)
+$(OUT): $(OBJ)
 	mkdir -p $(BUILD_DIR)
-	$(CXX) $(SRC) -o $(OUT) $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+	$(CXX) $(OBJ) -o $(OUT) $(LDFLAGS) $(LIBS)
+
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+-include $(DEP)
 
 copy_resources:
 	mkdir -p build/Plunder/res
@@ -65,4 +86,5 @@ copy_resources:
 	cp -r src/bin/* $(BUILD_DIR)/bin/
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) $(OBJ_DIR)
+.PHONY: all copy_resources clean

@@ -10,4 +10,5 @@ struct GameListData {
     std::string title;
     std::string baseUrl;
     std::string consoleName;
+    bool fromCatalog = false;   // served from the pre-built catalog (all games, one page)
 };

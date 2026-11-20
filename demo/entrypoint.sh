@@ -47,11 +47,12 @@ build() {
     BUILD_STATE=building; write_status
     echo "[demo] build #$BUILD_NO starting"
     rsync -a --delete --exclude .git --exclude build --exclude demo "$SRC/" "$WORK/"
-    rm -f "$WORK/build/Plunder/Plunder"   # Makefile deps ignore headers; always relink
+    # Incremental: the Makefile tracks header dependencies and builds in parallel,
+    # and /work is a volume, so only changed files recompile (even after restarts).
     if (cd "$WORK" && make CXX=g++ \
             CXXFLAGS="-I. -O1 -g $(sdl2-config --cflags)" \
             LDFLAGS="" \
-            LIBS="-lSDL2 -lSDL2_ttf -lSDL2_image -lSDL2_mixer -ljson-c -lpthread -lm") \
+            LIBS="-lSDL2 -lSDL2_ttf -lSDL2_image -lSDL2_mixer -ljson-c -lwebp -lz -lpthread -lm") \
             > "$LOGS/build.log" 2>&1; then
         # Keep the app's own state (theme config, image cache) across rebuilds.
         rsync -a --exclude config.json --exclude cache "$WORK/build/Plunder/" "$APP/"
