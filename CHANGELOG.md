@@ -14,6 +14,8 @@ Preview a release body locally with `scripts/release-notes.sh X.Y.Z`.
 
 ## Unreleased
 
+## v2.5.0
+
 ### Improvements in this update
 - Global search: a new Search screen on Home looks through every game on every site at once. Results update as you type, can be filtered by console, site and sort order, and open straight into the right site. "Search sites live" asks the sites directly for games newer than the catalog.
 - Covers that were already downloaded are no longer downloaded again.
@@ -21,7 +23,6 @@ Preview a release body locally with `scripts/release-notes.sh X.Y.Z`.
 - Game pages show the real description (no more "Download Rom" line), Romspedia games show their region, and titles keep their accents and symbols ("Pokémon", "Sword & Shield").
 - Site pages are read with a proper HTML parser: 20–100× faster on the device and far less likely to break when a site changes its layout.
 - Security: web addresses and file names from the ROM sites are no longer passed through a shell, so a malicious page can't run commands on your device.
-
 
 ## v2.4.0
 

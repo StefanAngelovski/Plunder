@@ -1,6 +1,6 @@
 #pragma once
 
-#define PLUNDER_VERSION "2.4.0"
+#define PLUNDER_VERSION "2.5.0"
 
 // GitHub repository info for update checking
 #define PLUNDER_GITHUB_OWNER "StefanAngelovski"
