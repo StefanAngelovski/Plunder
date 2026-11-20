@@ -46,7 +46,11 @@ build() {
     BUILD_NO=$((BUILD_NO + 1))
     BUILD_STATE=building; write_status
     echo "[demo] build #$BUILD_NO starting"
-    rsync -a --delete --exclude .git --exclude build --exclude demo "$SRC/" "$WORK/"
+    # Copy changed sources, then mark them as just-modified: rsync keeps the
+    # original timestamps, and a file saved while the previous build was
+    # compiling would otherwise look older than its object file and be skipped.
+    rsync -a --delete --exclude .git --exclude build --exclude demo --out-format='%n' "$SRC/" "$WORK/" > /tmp/changed.txt
+    (cd "$WORK" && while IFS= read -r f; do [ -f "$f" ] && touch "$f"; done < /tmp/changed.txt)
     # Incremental: the Makefile tracks header dependencies and builds in parallel,
     # and /work is a volume, so only changed files recompile (even after restarts).
     if (cd "$WORK" && make CXX=g++ \

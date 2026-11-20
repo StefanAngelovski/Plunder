@@ -5,7 +5,9 @@
 //  - Asynchronous image downloading & texture creation
 //
 
-#include "include/ListScreen.h"  
+#include "include/ListScreen.h"
+#include <set>
+#include <sys/stat.h>  
 #include "../../utils/include/Theme.h"
 #include "../../utils/include/ImageLoader.h"
 #include "../../catalog/include/Catalog.h"
@@ -43,9 +45,14 @@ ListScreen::ListScreen(const std::string& title, const std::string& romSite, con
     // Determine site type early
     if (romSite == "Hexrom") siteType = SiteType::Hexrom;
     else if (romSite == "Romspedia") siteType = SiteType::Romspedia;
+    else if (romSite == "Global") siteType = SiteType::Global;
     else siteType = SiteType::Hexrom; // default fallback
     // Site-specific modal setup
-    if (siteType == SiteType::Romspedia) setupRomspediaModal();
+    if (siteType == SiteType::Global) {
+        global = std::make_unique<GlobalSearchController>([this](const std::vector<ListItem>& results) {
+            applyNewResult(results, PaginationInfo(), true);
+        });
+    } else if (siteType == SiteType::Romspedia) setupRomspediaModal();
     else setupHexromModal();
     textures.resize(items.size(), nullptr);
     system("mkdir -p cache/images");
@@ -54,6 +61,7 @@ ListScreen::ListScreen(const std::string& title, const std::string& romSite, con
     moveSound = Mix_LoadWAV("sounds/move.wav");
     if (moveSound) Mix_VolumeChunk(moveSound, MIX_MAX_VOLUME);
     Mix_Volume(-1, MIX_MAX_VOLUME);
+    if (global) global->start();
 }
 
 ListScreen::~ListScreen() {
@@ -63,7 +71,10 @@ ListScreen::~ListScreen() {
     }
     stopThreads = true;
     stopImageLoaderThreads();
-    for (auto texture : textures) if (texture) SDL_DestroyTexture(texture);
+    std::set<SDL_Texture*> owned;
+    for (auto texture : textures) if (texture) owned.insert(texture);
+    for (auto& kv : textureByUrl) if (kv.second) owned.insert(kv.second);
+    for (auto texture : owned) SDL_DestroyTexture(texture);
     // unique_ptr modals auto-clean
 }
 
@@ -91,8 +102,14 @@ void ListScreen::applyNewResult(const std::vector<ListItem>& newItems, const Pag
         pagination = newPagination;
         selectedIndex = 0;
         scrollOffset = 0;
-        textures.clear();
-        textures.resize(items.size(), nullptr);
+        scrollOffsetAnim = 0.0f;
+        textures.assign(items.size(), nullptr);
+        for (size_t i = 0; i < items.size(); ++i) {
+            auto it = textureByUrl.find(items[i].imagePath);
+            if (it != textureByUrl.end()) textures[i] = it->second;
+        }
+        std::lock_guard<std::mutex> lock(downloadMutex);
+        pendingDownloads.clear();   // indices refer to the old list
     } else {
         // When appending (pagination), check if we got empty results
         if (newItems.empty() && newPagination.currentPage > 1) {
@@ -233,9 +250,11 @@ void ListScreen::startImageLoaderThreads(SDL_Renderer* renderer) {
                 if (idx >= 0 && !url.empty()) {
                     std::string ext = getFileExtension(url);
                     std::string filename = "cache/images/" + std::to_string(std::hash<std::string>{}(url)) + ext;
-                    if (HttpUtils::downloadImage(url, filename)) {
+                    struct stat st;
+                    bool cached = stat(filename.c_str(), &st) == 0 && st.st_size > 0;
+                    if (cached || HttpUtils::downloadImage(url, filename)) {
                         std::lock_guard<std::mutex> lock(downloadMutex);
-                        readyImages.push({idx, filename});
+                        readyImages.push({idx, filename, url});
                     }
                 } else {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -256,19 +275,21 @@ void ListScreen::stopImageLoaderThreads() {
 void ListScreen::updateTextures(SDL_Renderer* renderer) {
     std::lock_guard<std::mutex> lock(downloadMutex);
     while (!readyImages.empty()) {
-        auto tmp = readyImages.front();
-        int idx = tmp.first;
-        std::string path = tmp.second;
+        ReadyImage ready = readyImages.front();
         readyImages.pop();
-        if (idx >= 0 && idx < items.size() && idx < textures.size() && !textures[idx]) {
-            SDL_Surface* surface = ImageLoader::Load(path);  // WebP decoded by bundled libwebp
-            if (surface) {
-                textures[idx] = SDL_CreateTextureFromSurface(renderer, surface);
-                SDL_FreeSurface(surface);
-            } else {
-                // Suppressed verbose SDL_image shader compile errors (noise on device)
-                // std::cerr << "[Image] fail: " << path << std::endl;
-            }
+        SDL_Texture* tex = nullptr;
+        auto known = textureByUrl.find(ready.url);
+        if (known != textureByUrl.end()) {
+            tex = known->second;
+        } else if (SDL_Surface* surface = ImageLoader::Load(ready.path)) {  // WebP decoded by bundled libwebp
+            tex = SDL_CreateTextureFromSurface(renderer, surface);
+            SDL_FreeSurface(surface);
+            textureByUrl[ready.url] = tex;
+        }
+        // The list may have been replaced since this download was queued.
+        if (tex && ready.index >= 0 && ready.index < (int)items.size() && ready.index < (int)textures.size() &&
+            items[ready.index].imagePath == ready.url && !textures[ready.index]) {
+            textures[ready.index] = tex;
         }
     }
 }
@@ -289,6 +310,7 @@ void ListScreen::loadTexture(SDL_Renderer* renderer, int index) {
             if (surface) {
                 textures[index] = SDL_CreateTextureFromSurface(renderer, surface);
                 SDL_FreeSurface(surface);
+                textureByUrl[items[index].imagePath] = textures[index];
             }
             return;
         }
@@ -321,19 +343,21 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
     DrawBackground(renderer);
 
     // ---- Layout ----------------------------------------------------------------
-    const bool imageMode = tallGridMode;
-    const int contentTop = HEADER_H + 8;
-    const int contentBottom = SCREEN_H - FOOTER_H - 4;
+    if (global) global->update();
+    const bool imageMode = global ? !global->compact() : tallGridMode;
+    const int contentTop = HEADER_H + 8 + (global ? GlobalSearchController::kBarHeight + 6 : 0);
+    const int contentBottom = (global && global->compact()) ? global->keyboardTop() - 34 : SCREEN_H - FOOTER_H - 4;
     int gridColumns, cardW, cardH, gapX, gapY, visibleRows;
     if (imageMode) {
         gridColumns = 4; gapX = 24; gapY = 24;
         cardW = (SCREEN_W - 2 * MARGIN_X - (gridColumns - 1) * gapX) / gridColumns;
-        cardH = 254; visibleRows = 2;
+        cardH = 254;
     } else {
         gridColumns = 3; gapX = 16; gapY = 12;
         cardW = (SCREEN_W - 2 * MARGIN_X - (gridColumns - 1) * gapX) / gridColumns;
-        cardH = 60; visibleRows = 7;
+        cardH = 60;
     }
+    visibleRows = std::max(1, (contentBottom - contentTop + gapY) / (cardH + gapY));
     currentGridColumns = gridColumns;
     currentVisibleRows = visibleRows;
     const int rowStep = cardH + gapY;
@@ -345,7 +369,8 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         pill = "Page " + std::to_string(pagination.currentPage) + " of " + std::to_string(pagination.totalPages);
     else if (!items.empty())
         pill = std::to_string(items.size()) + (imageMode ? " games" : " consoles");
-    DrawHeader(renderer, title, romSite, pill);
+    if (global) DrawHeader(renderer, global->title(), "All sites", global->pill());
+    else DrawHeader(renderer, title, romSite, pill);
 
     // ---- Smooth scroll -----------------------------------------------------------
     scrollOffsetAnim += (scrollOffset - scrollOffsetAnim) * 0.3f;
@@ -413,6 +438,15 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
                 MaskCorners(renderer, art, 10, fill);
 
                 TTF_Font* tf = sel ? titleFontBold : titleFont;
+                if (!items[index].site.empty()) {
+                    // Global result: one title line + "Console · Site"
+                    int ty = art.y + art.h + 8;
+                    DrawText(renderer, tf, Ellipsize(tf, label, art.w), art.x + 2, ty, sel ? t.textPrimary : t.textSecondary);
+                    TTF_Font* mf = GetFont(14);
+                    std::string meta = items[index].consoleName + "  ·  " + items[index].site;
+                    DrawText(renderer, mf, Ellipsize(mf, meta, art.w), art.x + 2, ty + 24, WithAlpha(t.textSecondary, 200));
+                    continue;
+                }
                 std::vector<std::string> lines = WrapText(tf, label, art.w);
                 if (lines.size() > 2) {
                     std::string rest = lines[1];
@@ -428,6 +462,21 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
             } else {
                 std::string name, count;
                 SplitTrailingCount(label, name, count);
+                if (!items[index].site.empty()) {
+                    // Global result (compact list while typing)
+                    TTF_Font* nf = sel ? GetFont(17, true) : GetFont(17);
+                    TTF_Font* mf = GetFont(13);
+                    TTF_Font* pf = GetFont(13, true);
+                    const int pad = 16;
+                    int pillW = PillWidth(pf, items[index].site, 9);
+                    if (sel) FillRoundedRect(renderer, SDL_Rect{card.x + 7, card.y + 12, 4, card.h - 24}, 2, t.accentPrimary);
+                    int maxW = card.w - 2 * pad - pillW - 10;
+                    DrawText(renderer, nf, Ellipsize(nf, label, maxW), card.x + pad, card.y + 9, sel ? t.textPrimary : Mix(t.textSecondary, t.textPrimary, 0.45f));
+                    DrawText(renderer, mf, Ellipsize(mf, items[index].consoleName, maxW), card.x + pad, card.y + 33, WithAlpha(t.textSecondary, 200));
+                    DrawPill(renderer, pf, items[index].site, card.x + card.w - pad - pillW, card.y + (card.h - 22) / 2,
+                             WithAlpha(t.textPrimary, 16), t.textSecondary, 9, 22);
+                    continue;
+                }
                 TTF_Font* nf = sel ? GetFont(18, true) : GetFont(18);
                 TTF_Font* cf = GetFont(14, true);
                 int pad = 18;
@@ -453,8 +502,11 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
     // ---- Empty state ---------------------------------------------------------------
     if (items.empty()) {
         int cy = (contentTop + contentBottom) / 2;
-        RenderTextCentered(renderer, GetFont(24, true), "Nothing here", SCREEN_W / 2, cy - 16, Color(t.textPrimary));
-        RenderTextCentered(renderer, GetFont(18), "Try another search or filter.", SCREEN_W / 2, cy + 18, Color(t.textSecondary));
+        std::string head = global ? global->emptyTitle() : "Nothing here";
+        std::string sub = global ? global->emptyHint() : "Try another search or filter.";
+        if (global && global->liveRunning()) DrawSpinner(renderer, SCREEN_W / 2, cy - 58, 16, t.accentPrimary);
+        RenderTextCentered(renderer, GetFont(24, true), head, SCREEN_W / 2, cy - 16, Color(t.textPrimary));
+        RenderTextCentered(renderer, GetFont(18), sub, SCREEN_W / 2, cy + 18, Color(t.textSecondary));
     }
 
     // ---- Scrollbar ---------------------------------------------------------------------
@@ -468,7 +520,14 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
                         (siteType == SiteType::Romspedia && romspediaModal && romspediaModal->isVisible());
 
     // ---- Footer (the modal draws its own hints) -----------------------------------
-    if (modalVisible) {
+    if (global) {
+        if (!global->compact() && global->mode() != GlobalSearchController::Mode::Filters) {
+            std::string status = items.empty() ? global->footerStatus()
+                                               : std::to_string(selectedIndex + 1) + " / " + std::to_string(items.size()) + "  ·  " + global->footerStatus();
+            DrawFooterStatus(renderer, status, global->liveRunning());
+            DrawHints(renderer, global->hints());
+        }
+    } else if (modalVisible) {
         // skip
     } else if (loadingMore) {
         DrawFooterStatus(renderer, "Loading more…", true);
@@ -476,13 +535,19 @@ void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
         DrawFooterStatus(renderer, std::to_string(selectedIndex + 1) + " / " + std::to_string(items.size()) +
                                    (sourceNote.empty() ? "" : "  ·  " + sourceNote));
     }
-    if (!modalVisible) {
+    if (!modalVisible && !global) {
         std::vector<Hint> hints = {{"DPAD", "Navigate"}};
         if (pagination.totalPages > 1) hints.push_back({"LR", "Page"});
         hints.push_back({"Y", "Search"});
         hints.push_back({"A", "Open"});
         hints.push_back({"B", "Back"});
         DrawHints(renderer, hints);
+    }
+
+    // ---- Global search bar + keyboard / filters -------------------------------------
+    if (global) {
+        global->renderBar(renderer, HEADER_H + 2);
+        global->renderOverlay(renderer);
     }
 
     // ---- Filter modal --------------------------------------------------------------
@@ -587,6 +652,7 @@ void ListScreen::updateAnalogScroll() {
 
 // --- Input Handling -----------------------------------------------------------------------
 void ListScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
+    if (global && global->handleInput(e)) return;
     // --- Trigger Filter modal only if not in console menu ---
     if (e.type == SDL_CONTROLLERBUTTONDOWN && e.cbutton.button == BUTTON_Y) {
         bool isConsoleMenu = false;

@@ -18,6 +18,8 @@
 
 // Other imports
 #include "OnscreenKeyboard.h"
+#include "../../globalSearch/include/GlobalSearchController.h"
+#include <unordered_map>
 #include "../../Screen.h"
 #include "../../../model/ListItem.h"
 #include "../../../model/PaginationInfo.h"
@@ -73,7 +75,11 @@ private:
 
     // Multithreaded image loading
     std::map<int, std::string> pendingDownloads; // index -> image URL
-    std::queue<std::pair<int, std::string>> readyImages; // index, local path
+    struct ReadyImage { int index; std::string path; std::string url; };
+    std::queue<ReadyImage> readyImages;           // finished downloads (url guards against stale indices)
+    // Every texture created, by image URL: reused when the list is replaced
+    // (search results) and freed in the destructor.
+    std::unordered_map<std::string, SDL_Texture*> textureByUrl;
     std::mutex downloadMutex;
     std::atomic<bool> stopThreads{false};
     void startImageLoaderThreads(SDL_Renderer* renderer);
@@ -92,11 +98,13 @@ private:
     Mix_Chunk* moveSound = nullptr;
 
     // --- Filter modal UI (site specific via union-style void*) ---
-    enum class SiteType { Hexrom, Romspedia };
+    enum class SiteType { Hexrom, Romspedia, Global };
     SiteType siteType;
     // Own concrete modals (no abstraction layer/adapters)
     std::unique_ptr<HexromFilterModal> hexromModal;
     std::unique_ptr<RomspediaFilterModal> romspediaModal;
+    // Global search across all sites (romSite == "Global")
+    std::unique_ptr<GlobalSearchController> global;
     // Shared filter state (Hexrom uses indices in its modal already)
     std::string romspediaSearch;
     std::string sourceNote;

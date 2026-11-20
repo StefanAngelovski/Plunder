@@ -53,6 +53,7 @@ void CarouselMenuScreen::addItem(const std::string& label, const std::string& im
         else if (label == "Exit") img = "images/mainmenu/exit.png";
         else if (label == "Patch Notes") img = "images/mainmenu/patchnotes.png";
         else if (label == "Rom Sites") img = "images/mainmenu/romsites.png";
+        else if (label == "Search") img = "images/mainmenu/search.png";
         else if (label == "Hexrom") img = "images/consoles/hexrom.png";
         else if (label == "Romspedia") img = "images/consoles/romspedia.png";
     }

@@ -253,8 +253,9 @@ void MenuApplication::fetchGameDetailsAsync(const ListItem& game, SDL_Texture* i
         auto scraper = currentScraper();
         std::cout << "[MenuApplication] Current scraper available: " << (scraper != nullptr) << std::endl;
         GameDetails details = scraper ? scraper->fetchGameDetails(game.downloadUrl) : GameDetails{};
-        details.consoleName = consoleName;
-        details.mappedFolder = getFolderForScrapedConsole(consoleName);
+        // Unknown console (e.g. a live search result): use the one on the game's page.
+        if (!consoleName.empty()) details.consoleName = consoleName;
+        details.mappedFolder = getFolderForScrapedConsole(details.consoleName);
         SDL_Event event; SDL_zero(event);
         event.type = SDL_USEREVENT; event.user.code = EVENT_GAME_DETAILS_LOADED; event.user.data1 = new DetailsWithTexture{details, iconTexture};
         SDL_PushEvent(&event);
@@ -345,6 +346,25 @@ void MenuApplication::setupScreens() {
             romSites->addItem(sd.id, "", [this, loadRomSite, i]() { loadRomSite(i); });
         }
         menuSystem->pushScreen(romSites);
+    });
+    carousel->addItem("Search", "", [this]() {
+        // Global search across every site (catalog first, live sites on request).
+        auto search = std::make_shared<ListScreen>("Search", "Global", std::vector<ListItem>{}, renderer,
+                                                   [](const ListItem&) {}, nullptr, PaginationInfo());
+        search->setTallGridMode(true);
+        std::weak_ptr<ListScreen> weak = search;
+        search->onItemSelected2 = [this, weak](const ListItem& game, int index) {
+            int siteIdx = findSiteIndexById(game.site);
+            if (siteIdx < 0) return;
+            currentSiteIndex = siteIdx;            // details/download use this site's scraper
+            currentSite = game.site;
+            currentConsoleName = game.console;     // and this console's ROM folder
+            auto screen = weak.lock();
+            SDL_Texture* cover = screen && index >= 0 ? screen->getTextureAt(index) : nullptr;
+            menuSystem->pushScreen(std::make_shared<LoadingScreen>("Loading game details..."));
+            fetchGameDetailsAsync(game, cover, game.console);
+        };
+        menuSystem->pushScreen(search);
     });
     carousel->addItem("Patch Notes", "", [this]() {
         auto patchScreen = std::make_shared<PatchNotesScreen>();
