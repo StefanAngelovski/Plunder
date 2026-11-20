@@ -13,18 +13,22 @@ WEBP_DIR = /sdk/webp
 
 # Compiler Setup
 CXX = $(TOOLCHAIN_DIR)/bin/aarch64-linux-gnu-g++
+CC = $(TOOLCHAIN_DIR)/bin/aarch64-linux-gnu-gcc
+CFLAGS = -O2
 # -O2: optimised build so the app runs as fast as possible on the handheld
 CXXFLAGS = -O2 -I$(SDL_DIR)/include -I$(SYSROOT_DIR)/include -I$(WEBP_DIR)/include -I.
 LDFLAGS = -L$(SYSROOT_DIR)/lib -L$(SYSROOT_DIR)/lib/mali -Wl,-rpath-link=$(SYSROOT_DIR)/lib/mali
 LIBS = $(WEBP_DIR)/lib/libwebpdecoder.a -lSDL2 -lSDL2_ttf -lSDL2_image -lSDL2_mixer -lmad -lfreetype -lz -lbz2 -lGLESv2 -lEGL -lIMGegl -lsrv_um -lusc -lglslcompiler -lm -lpthread -ljson-c
 
 SRC = $(shell find src -name '*.cpp')
+# C sources: src/scraper/engine/htmlq.c, which compiles the vendored lexbor HTML parser.
+CSRC = $(shell find src -name '*.c')
 
 # Incremental, parallel build: one object per source file in build/obj (kept out
 # of build/Plunder, which is what ships). -MMD -MP records header dependencies,
 # so editing a .h recompiles exactly the files that include it.
 OBJ_DIR = build/obj
-OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)
+OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o) $(CSRC:%.c=$(OBJ_DIR)/%.c.o)
 DEP = $(OBJ:.o=.d)
 
 # Use every core by default; override with e.g. `make -j2`.
@@ -41,6 +45,10 @@ $(OUT): $(OBJ)
 $(OBJ_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(OBJ_DIR)/%.c.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 -include $(DEP)
 

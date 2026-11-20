@@ -1,0 +1,17 @@
+# Scraper tests: run the site definitions against the saved pages in
+# tests/fixtures on every push and pull request.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  scraper-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libsdl2-dev libsdl2-ttf-dev
+      - name: Build and run
+        run: tests/run.sh

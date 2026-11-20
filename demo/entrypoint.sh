@@ -53,7 +53,7 @@ build() {
     (cd "$WORK" && while IFS= read -r f; do [ -f "$f" ] && touch "$f"; done < /tmp/changed.txt)
     # Incremental: the Makefile tracks header dependencies and builds in parallel,
     # and /work is a volume, so only changed files recompile (even after restarts).
-    if (cd "$WORK" && make CXX=g++ \
+    if (cd "$WORK" && make CXX=g++ CC=gcc CFLAGS="-O1 -g" \
             CXXFLAGS="-I. -O1 -g $(sdl2-config --cflags)" \
             LDFLAGS="" \
             LIBS="-lSDL2 -lSDL2_ttf -lSDL2_image -lSDL2_mixer -ljson-c -lwebp -lz -lpthread -lm") \
