@@ -38,6 +38,10 @@ public:
     
     // Get current theme colors
     const ThemeColors& colors() const { return currentColors; }
+
+    // Colors of any preset by id ("default", "dark", "wasp", "ocean", "sunset");
+    // unknown ids return the default palette. Used for theme previews.
+    static ThemeColors preset(const std::string& themeId);
     
     // Convenience color getters
     SDL_Color background() const { return currentColors.background; }
@@ -69,10 +73,4 @@ private:
     std::string currentThemeId;
     ThemeColors currentColors;
     
-    // Theme presets
-    ThemeColors getDefaultTheme() const;
-    ThemeColors getDarkTheme() const;
-    ThemeColors getWaspTheme() const;
-    ThemeColors getOceanTheme() const;
-    ThemeColors getSunsetTheme() const;
 };

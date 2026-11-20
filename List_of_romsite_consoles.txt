@@ -100,61 +100,7 @@ WonderSwan (WS)
 Xbox 360 ROMs & ISO
 ZX Spectrum (TAP)
 
-=== GAMULATOR CONSOLES ===
-
-PSP
-NDS
-GBA
-N64
-SNES
-PS2
-GameCube
-Mame
-PSX
-Nintendo Wii
-NES
-GBC
-PS3
-Megadrive
-Sega Dreamcast
-GB
-Neo Geo
-Sega Saturn
-Sega CD
-Sega NAOMI
-Atari 2600
-Sega Master System
-Sega Game Gear
-CPS 2
-CPS 1
-Dos
-ScummVM
-Famicom
-ZX Spectrum
-TurboGrafx16
-CPS 3
-Neo Geo Pocket
-Amiga
-Sega 32X
-X68000
-C64 Preservation
-Atari 5200
-Atari ST
-C64 Tapes
-Apple II
-Atari Lynx
-Virtual Boy
-Atari Jaguar
-Atari 7800
-3DO
-CD-i
-BBC Micro
-Turbo Duo
-PC-FX
-Wonderswan
-Wonderswan Color
-
-== Romspedia Consoles ==
+=== ROMSPEDIA CONSOLES ===
 PS2 ROMs
 3DS ROMs
 Wii ROMs

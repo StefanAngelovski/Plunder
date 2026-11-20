@@ -7,6 +7,7 @@
 
 SettingsScreen::SettingsScreen(std::function<void()> onBack, std::function<void()> onThemes)
     : CarouselMenuScreen("Settings"), onBackCallback(onBack), onThemesCallback(onThemes) {
+    setSubtitle("Plunder");
     introDisabled = isIntroDisabled();
     updateCheckboxLabel();
 }
@@ -168,96 +169,45 @@ void SettingsScreen::downloadAndInstallUpdate() {
 }
 
 // Custom rendering for each carousel item
-void SettingsScreen::renderItem(SDL_Renderer* renderer, TTF_Font* font, int i, int x, int y, int w, int h, bool focused) {
+CarouselItemDecor SettingsScreen::decorate(int i) {
+    CarouselItemDecor d;
     const auto& items = getItems();
-    
-    // Special rendering for the Update button - rotate icon 90 degrees and show version
-    if (items[i].label.find("Check for Updates") != std::string::npos || 
-        items[i].label.find("Update:") != std::string::npos ||
-        items[i].label.find("Checking") != std::string::npos ||
-        items[i].label.find("Downloading") != std::string::npos ||
-        items[i].label.find("Restart to Update") != std::string::npos ||
-        items[i].label.find("Error") != std::string::npos) {
-        
-        // Draw border
-        SDL_Color borderColor = focused ? SDL_Color{255, 255, 255, 255} : SDL_Color{180, 180, 180, 255};
-        int borderThickness = focused ? 3 : 2;
-        SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
-        for (int t = 0; t < borderThickness; ++t) {
-            SDL_Rect borderRect = {x - t, y - t, w + 2*t, h + 2*t};
-            SDL_RenderDrawRect(renderer, &borderRect);
+    if (i < 0 || i >= (int)items.size()) return d;
+    const std::string& label = items[i].label;
+
+    if (i == 0) {  // update status card (label changes with the state)
+        d.iconAngle = -90.0;  // back arrow rotated to point up
+        d.sublabel = "Installed v" + std::string(PLUNDER_VERSION);
+        switch (updateState.load()) {
+            case UpdateState::UpdateAvailable: d.badge = "New"; d.badgeOn = true; break;
+            case UpdateState::ReadyToInstall:  d.badge = "Ready"; d.badgeOn = true; break;
+            case UpdateState::Error:           d.badge = "Error"; break;
+            default: break;
         }
-        
-        // Load and draw icon rotated -90 degrees (pointing down)
-        if (!items[i].imagePath.empty()) {
-            SDL_Texture* tex = IMG_LoadTexture(renderer, items[i].imagePath.c_str());
-            if (tex) {
-                int maxSize = w * 0.6;
-                int texW = 0, texH = 0;
-                SDL_QueryTexture(tex, NULL, NULL, &texW, &texH);
-                float aspect = texW > 0 && texH > 0 ? (float)texW / texH : 1.0f;
-                int drawW = maxSize, drawH = maxSize;
-                if (aspect > 1.0f) drawH = (int)(maxSize / aspect);
-                else drawW = (int)(maxSize * aspect);
-                
-                SDL_Rect imgRect = {x + (w-drawW)/2, y + (h-drawH)/2, drawW, drawH};
-                // Rotate -90 degrees (270 clockwise) to point down
-                SDL_RenderCopyEx(renderer, tex, NULL, &imgRect, -90.0, NULL, SDL_FLIP_NONE);
-                SDL_DestroyTexture(tex);
+    } else if (label == "Disable Intro") {
+        d.badge = introDisabled ? "On" : "Off";
+        d.badgeOn = introDisabled;
+        d.sublabel = introDisabled ? "Intro video is skipped" : "Intro video plays on launch";
+    } else if (label == "Clear Cache") {
+        d.sublabel = "Remove cached cover images";
+        if (cacheClearedFlash) {
+            int elapsed = (int)std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - cacheClearedFlashStart).count();
+            if (elapsed < cacheClearedFlashDurationMs) {
+                d.flash = (float)elapsed / cacheClearedFlashDurationMs;
+                d.sublabel = "Cache cleared";
+            } else {
+                cacheClearedFlash = false;
             }
         }
-        
-        // Draw label
-        UiUtils::Color labelColor(255,255,255);
-        UiUtils::RenderTextCentered(renderer, font, items[i].label, x + w/2, y + h + 32, labelColor);
-        
-        // Draw version below the label
-        UiUtils::Color versionColor(180, 180, 180);
-        std::string versionText = "v" + std::string(PLUNDER_VERSION);
-        UiUtils::RenderTextCentered(renderer, font, versionText, x + w/2, y + h + 55, versionColor);
-        
-        return;
+    } else if (label == "Themes") {
+        std::string id = Theme::getInstance().getCurrentThemeId();
+        if (!id.empty()) id[0] = (char)std::toupper((unsigned char)id[0]);
+        d.sublabel = "Current: " + id;
     }
-    
-    // Custom background for Disable Intro BEFORE base so border/icon render atop
-    if (items[i].label == "Disable Intro") {
-        SDL_Color toggleColor = introDisabled ? Theme::getInstance().toggleOn() : Theme::getInstance().toggleOff();
-        if (introDisabled) {
-            SDL_SetRenderDrawColor(renderer, toggleColor.r, toggleColor.g, toggleColor.b, focused ? 255 : 220);
-        } else {
-            SDL_SetRenderDrawColor(renderer, toggleColor.r, toggleColor.g, toggleColor.b, focused ? 200 : 160);
-        }
-        SDL_Rect bgRect = {x + 2, y + 2, w - 4, h - 4};
-        SDL_RenderFillRect(renderer, &bgRect);
-    }
-    // First draw standard item (border, icon, label)
-    CarouselMenuScreen::renderItem(renderer, font, i, x, y, w, h, focused);
-    // Overlay shine AFTER base so it is visible over icon
-    if (items[i].label == "Clear Cache" && cacheClearedFlash) {
-        int elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - cacheClearedFlashStart).count();
-        if (elapsed < cacheClearedFlashDurationMs) {
-            float t = (float)elapsed / cacheClearedFlashDurationMs;
-            int shineCenter = y + (int)(h * t);
-            int shineHeight = 40;
-            SDL_BlendMode oldMode; // not retrievable directly; just set additive and then revert to blend
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
-            for (int yy = 0; yy < h; ++yy) {
-                int absY = y + yy;
-                float dist = std::abs(absY - shineCenter) / (shineHeight / 2.0f);
-                float alphaF = std::max(0.0f, 1.0f - dist);
-                int alpha = (int)(alphaF * 180); // brighter overlay
-                if (alpha <= 0) continue;
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, alpha);
-                SDL_RenderDrawLine(renderer, x + 4, absY, x + w - 4, absY);
-            }
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        } else {
-            cacheClearedFlash = false;
-        }
-    }
+    return d;
 }
 
-// Read the "disable_intro" setting from config file
 bool SettingsScreen::isIntroDisabled() {
     struct stat st;
     if (stat(CONFIG_PATH, &st) != 0) return false;

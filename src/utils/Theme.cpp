@@ -32,19 +32,7 @@ Theme::Theme() {
 
 void Theme::loadTheme(const std::string& themeId) {
     currentThemeId = themeId;
-    
-    if (themeId == "dark") {
-        currentColors = getDarkTheme();
-    } else if (themeId == "wasp") {
-        currentColors = getWaspTheme();
-    } else if (themeId == "ocean") {
-        currentColors = getOceanTheme();
-    } else if (themeId == "sunset") {
-        currentColors = getSunsetTheme();
-    } else {
-        currentColors = getDefaultTheme();
-    }
-    
+    currentColors = preset(themeId);
     std::cerr << "[Theme] Loaded theme: " << themeId << std::endl;
 }
 
@@ -73,123 +61,97 @@ void Theme::applyBackgroundDark(SDL_Renderer* renderer) const {
 }
 
 // ==================== Theme Presets ====================
+// Modern dark palettes: tinted near-black backgrounds, slightly lifted card
+// surfaces, one vivid accent. Field order follows ThemeColors.
 
-ThemeColors Theme::getDefaultTheme() const {
+ThemeColors Theme::preset(const std::string& themeId) {
+    if (themeId == "dark") {
+        return ThemeColors{
+            {20, 20, 25, 255},      // background
+            {27, 27, 33, 255},      // backgroundAlt
+            {11, 11, 14, 255},      // backgroundDark
+            {36, 36, 44, 255},      // cardBackground
+            {244, 244, 247, 255},   // textPrimary
+            {150, 150, 166, 255},   // textSecondary
+            {165, 180, 252, 255},   // textHighlight
+            {129, 140, 248, 255},   // borderFocused
+            {56, 56, 68, 255},      // borderUnfocused
+            {129, 140, 248, 255},   // accentPrimary (indigo)
+            {56, 189, 248, 255},    // accentSecondary
+            {67, 56, 202, 255},     // activeItem
+            {74, 222, 128, 255},    // toggleOn
+            {63, 63, 74, 255}       // toggleOff
+        };
+    }
+    if (themeId == "wasp") {
+        return ThemeColors{
+            {24, 21, 11, 255},
+            {32, 28, 14, 255},
+            {13, 12, 6, 255},
+            {45, 40, 19, 255},
+            {255, 246, 220, 255},
+            {196, 178, 128, 255},
+            {253, 224, 71, 255},
+            {250, 204, 21, 255},
+            {76, 67, 32, 255},
+            {250, 204, 21, 255},    // accentPrimary (yellow)
+            {251, 146, 60, 255},
+            {161, 128, 8, 255},
+            {250, 204, 21, 255},
+            {76, 67, 32, 255}
+        };
+    }
+    if (themeId == "ocean") {
+        return ThemeColors{
+            {11, 27, 51, 255},
+            {15, 35, 64, 255},
+            {5, 14, 30, 255},
+            {22, 46, 80, 255},
+            {234, 244, 255, 255},
+            {143, 172, 208, 255},
+            {125, 211, 252, 255},
+            {56, 189, 248, 255},
+            {42, 70, 108, 255},
+            {56, 189, 248, 255},    // accentPrimary (sky)
+            {45, 212, 191, 255},
+            {3, 105, 161, 255},
+            {45, 212, 191, 255},
+            {42, 70, 108, 255}
+        };
+    }
+    if (themeId == "sunset") {
+        return ThemeColors{
+            {38, 17, 32, 255},
+            {48, 22, 40, 255},
+            {20, 8, 17, 255},
+            {64, 30, 53, 255},
+            {255, 241, 236, 255},
+            {212, 168, 175, 255},
+            {253, 186, 116, 255},
+            {251, 146, 60, 255},
+            {96, 52, 74, 255},
+            {251, 146, 60, 255},    // accentPrimary (orange)
+            {244, 114, 182, 255},
+            {157, 58, 72, 255},
+            {251, 146, 60, 255},
+            {96, 52, 74, 255}
+        };
+    }
+    // "default": Plunder teal
     return ThemeColors{
-        // Background colors (teal theme - original)
-        {24, 153, 165, 255},     // background
-        {32, 170, 180, 255},     // backgroundAlt
-        {20, 20, 40, 255},       // backgroundDark
-        {32, 120, 140, 255},     // cardBackground
-        
-        // Text colors
-        {255, 255, 255, 255},    // textPrimary
-        {200, 200, 200, 255},    // textSecondary
-        {50, 255, 150, 255},     // textHighlight (green)
-        
-        // UI element colors
-        {255, 255, 255, 255},    // borderFocused
-        {180, 180, 180, 255},    // borderUnfocused
-        {80, 200, 255, 255},     // accentPrimary (cyan)
-        {120, 200, 255, 255},    // accentSecondary
-        {0, 180, 120, 255},      // activeItem (green)
-        {0, 220, 180, 255},      // toggleOn
-        {0, 120, 140, 255}       // toggleOff
-    };
-}
-
-ThemeColors Theme::getDarkTheme() const {
-    return ThemeColors{
-        // Background colors (dark/charcoal)
-        {30, 30, 35, 255},       // background
-        {40, 40, 48, 255},       // backgroundAlt
-        {15, 15, 20, 255},       // backgroundDark
-        {50, 50, 60, 255},       // cardBackground
-        
-        // Text colors
-        {240, 240, 245, 255},    // textPrimary
-        {160, 160, 170, 255},    // textSecondary
-        {100, 200, 255, 255},    // textHighlight (blue)
-        
-        // UI element colors
-        {200, 200, 210, 255},    // borderFocused
-        {100, 100, 110, 255},    // borderUnfocused
-        {100, 150, 255, 255},    // accentPrimary (blue)
-        {80, 130, 220, 255},     // accentSecondary
-        {60, 100, 180, 255},     // activeItem
-        {80, 180, 120, 255},     // toggleOn
-        {60, 60, 70, 255}        // toggleOff
-    };
-}
-
-ThemeColors Theme::getWaspTheme() const {
-    return ThemeColors{
-        // Background colors (yellow/black wasp)
-        {40, 35, 10, 255},       // background (dark golden)
-        {50, 45, 15, 255},       // backgroundAlt
-        {20, 18, 5, 255},        // backgroundDark
-        {70, 60, 20, 255},       // cardBackground
-        
-        // Text colors
-        {255, 230, 150, 255},    // textPrimary (warm yellow)
-        {180, 160, 100, 255},    // textSecondary
-        {255, 220, 0, 255},      // textHighlight (bright yellow)
-        
-        // UI element colors
-        {255, 220, 80, 255},     // borderFocused (yellow)
-        {140, 120, 60, 255},     // borderUnfocused
-        {255, 200, 0, 255},      // accentPrimary (golden yellow)
-        {255, 180, 50, 255},     // accentSecondary
-        {180, 150, 30, 255},     // activeItem
-        {255, 200, 0, 255},      // toggleOn (bright yellow)
-        {60, 50, 20, 255}        // toggleOff
-    };
-}
-
-ThemeColors Theme::getOceanTheme() const {
-    return ThemeColors{
-        // Background colors (deep blue ocean)
-        {20, 50, 90, 255},       // background
-        {25, 60, 100, 255},      // backgroundAlt
-        {10, 25, 45, 255},       // backgroundDark
-        {30, 70, 110, 255},      // cardBackground
-        
-        // Text colors
-        {230, 240, 255, 255},    // textPrimary
-        {150, 180, 210, 255},    // textSecondary
-        {100, 255, 200, 255},    // textHighlight (aqua)
-        
-        // UI element colors
-        {200, 220, 255, 255},    // borderFocused
-        {100, 130, 170, 255},    // borderUnfocused
-        {60, 180, 220, 255},     // accentPrimary (cyan)
-        {80, 160, 200, 255},     // accentSecondary
-        {40, 140, 180, 255},     // activeItem
-        {60, 200, 180, 255},     // toggleOn
-        {40, 80, 120, 255}       // toggleOff
-    };
-}
-
-ThemeColors Theme::getSunsetTheme() const {
-    return ThemeColors{
-        // Background colors (warm sunset)
-        {80, 40, 60, 255},       // background
-        {100, 50, 70, 255},      // backgroundAlt
-        {40, 20, 30, 255},       // backgroundDark
-        {120, 60, 80, 255},      // cardBackground
-        
-        // Text colors
-        {255, 240, 230, 255},    // textPrimary
-        {200, 180, 170, 255},    // textSecondary
-        {255, 200, 100, 255},    // textHighlight (gold)
-        
-        // UI element colors
-        {255, 220, 200, 255},    // borderFocused
-        {180, 140, 130, 255},    // borderUnfocused
-        {255, 150, 100, 255},    // accentPrimary (orange)
-        {255, 180, 120, 255},    // accentSecondary
-        {200, 100, 80, 255},     // activeItem
-        {255, 180, 100, 255},    // toggleOn
-        {100, 60, 70, 255}       // toggleOff
+        {10, 34, 40, 255},          // background
+        {14, 42, 49, 255},          // backgroundAlt
+        {4, 17, 21, 255},           // backgroundDark
+        {21, 56, 64, 255},          // cardBackground
+        {236, 248, 247, 255},       // textPrimary
+        {140, 178, 180, 255},       // textSecondary
+        {94, 234, 212, 255},        // textHighlight
+        {45, 212, 191, 255},        // borderFocused
+        {38, 78, 86, 255},          // borderUnfocused
+        {45, 212, 191, 255},        // accentPrimary (teal)
+        {56, 189, 248, 255},        // accentSecondary
+        {17, 110, 100, 255},        // activeItem
+        {45, 212, 191, 255},        // toggleOn
+        {38, 78, 86, 255}           // toggleOff
     };
 }

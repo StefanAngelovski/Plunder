@@ -27,26 +27,6 @@ std::string getFileExtension(const std::string& url) {
     return ".jpg";
 }
 
-inline bool isGamulator(const std::string& romSite) { return romSite == "Gamulator"; }
-
-// Draw a very rough rounded rectangle (approximation by plotting corner points).
-void drawApproxRoundedBorder(SDL_Renderer* renderer, const SDL_Rect& rect, int radius, SDL_Color fill, Uint8 alpha) {
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, (Uint8)(fill.a * (alpha / 255.0f)));
-    SDL_RenderFillRect(renderer, &rect);
-    for (int dx = 0; dx < radius; ++dx) {
-        for (int dy = 0; dy < radius; ++dy) {
-            if ((dx*dx + dy*dy) < radius*radius) {
-                SDL_RenderDrawPoint(renderer, rect.x + dx, rect.y + dy);
-                SDL_RenderDrawPoint(renderer, rect.x + rect.w - 1 - dx, rect.y + dy);
-                SDL_RenderDrawPoint(renderer, rect.x + dx, rect.y + rect.h - 1 - dy);
-                SDL_RenderDrawPoint(renderer, rect.x + rect.w - 1 - dx, rect.y + rect.h - 1 - dy);
-            }
-        }
-    }
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-}
-
 } // namespace
 // ==============================================================================================
 
@@ -58,13 +38,11 @@ ListScreen::ListScreen(const std::string& title, const std::string& romSite, con
     : title(title), items(initialItems), onItemSelected1(onSelect), onPageChange(pageChangeCallback), pagination(paginationInfo), romSite(romSite)
 {
     // Determine site type early
-    if (romSite == "Gamulator") siteType = SiteType::Gamulator;
-    else if (romSite == "Hexrom") siteType = SiteType::Hexrom;
+    if (romSite == "Hexrom") siteType = SiteType::Hexrom;
     else if (romSite == "Romspedia") siteType = SiteType::Romspedia;
     else siteType = SiteType::Hexrom; // default fallback
     // Site-specific modal setup
-    if (siteType == SiteType::Gamulator) setupGamulatorModal();
-    else if (siteType == SiteType::Romspedia) setupRomspediaModal();
+    if (siteType == SiteType::Romspedia) setupRomspediaModal();
     else setupHexromModal();
     textures.resize(items.size(), nullptr);
     system("mkdir -p cache/images");
@@ -87,24 +65,6 @@ ListScreen::~ListScreen() {
 }
 
 // --- Site-specific modal setup helpers -----------------------------------------------------
-void ListScreen::setupGamulatorModal() {
-    gamulatorModal = std::make_unique<GamulatorFilterModal>();
-    gamulatorSearch.clear();
-    // Set initial filter state - always active if we're in a specific console
-    bool isConsoleSpecific = pagination.baseUrl.find("/roms/") != std::string::npos && 
-                            pagination.baseUrl.find("gamulator.com/roms") != std::string::npos &&
-                            pagination.baseUrl != "https://www.gamulator.com/roms";
-    gamulatorFilterActive = isConsoleSpecific;
-    // Store the original console URL for filtering
-    if (isConsoleSpecific) {
-        gamulatorOriginalConsoleUrl = pagination.baseUrl;
-    }
-    gamulatorModal->setOnFilter([this](const std::string& search, int region, int sort, int order, int genre){
-        (void)region; (void)sort; (void)order; (void)genre;
-        runSiteFilter(search, region, sort, order, genre);
-    });
-}
-
 void ListScreen::setupHexromModal() {
     hexromModal = std::make_unique<HexromFilterModal>();
     hexromModal->setOnFilter([this](const std::string& search, int region, int sort, int order, int genre){
@@ -142,47 +102,7 @@ void ListScreen::applyNewResult(const std::vector<ListItem>& newItems, const Pag
 }
 
 void ListScreen::runSiteFilter(const std::string& search, int region, int sort, int order, int genre) {
-    if (siteType == SiteType::Gamulator) {
-        gamulatorSearch = search;
-        // Always use filter for Gamulator if we're in a specific console (baseUrl contains /roms/console-name)
-        // or if there's a search term
-        bool isConsoleSpecific = pagination.baseUrl.find("/roms/") != std::string::npos && 
-                                pagination.baseUrl.find("gamulator.com/roms") != std::string::npos &&
-                                pagination.baseUrl != "https://www.gamulator.com/roms";
-        gamulatorFilterActive = !search.empty() || isConsoleSpecific;
-        
-        if (!search.empty() && isConsoleSpecific) {
-            // Use console-specific filtering
-            std::string searchUrl = "https://www.gamulator.com/search?search_term_string=";
-            auto urlEncode = [](const std::string& value) -> std::string {
-                std::ostringstream escaped;
-                escaped.fill('0');
-                escaped << std::hex;
-                for (char c : value) {
-                    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
-                        escaped << c;
-                    } else if (c == ' ') {
-                        escaped << '+';
-                    } else {
-                        escaped << '%' << std::uppercase << std::setw(2) << int((unsigned char)c) << std::nouppercase;
-                    }
-                }
-                return escaped.str();
-            };
-            searchUrl += urlEncode(search);
-            
-            // Use the original console URL for filtering, not the current pagination.baseUrl
-            std::string filterBaseUrl = gamulatorOriginalConsoleUrl.empty() ? pagination.baseUrl : gamulatorOriginalConsoleUrl;
-            auto result = GamulatorScraperFilter::filterGames(searchUrl, filterBaseUrl, gamulatorSearch, 1);
-            applyNewResult(result.first, result.second, true);
-        } else {
-            // Use the original filter function for non-console specific searches
-            std::string filterBaseUrl = gamulatorOriginalConsoleUrl.empty() ? pagination.baseUrl : gamulatorOriginalConsoleUrl;
-            auto result = GamulatorScraperFilter::filterGames(filterBaseUrl, *gamulatorModal, gamulatorSearch, 1);
-            applyNewResult(result.first, result.second, true);
-        }
-        gamulatorModal->showModal(false);
-    } else if (siteType == SiteType::Romspedia) {
+    if (siteType == SiteType::Romspedia) {
         romspediaSearch = search;
         // Always use filter for Romspedia if we're in a specific console (baseUrl contains /roms/console-name)
         // or if there's a search term
@@ -229,29 +149,7 @@ void ListScreen::runSiteFilter(const std::string& search, int region, int sort, 
 }
 
 void ListScreen::runSitePaginate(int page) {
-    if (siteType == SiteType::Gamulator) {
-        if (gamulatorFilterActive) {
-            // Check if we're filtering within a specific console
-            bool isConsoleSpecific = !gamulatorOriginalConsoleUrl.empty() && 
-                                   gamulatorOriginalConsoleUrl.find("/roms/") != std::string::npos && 
-                                   gamulatorOriginalConsoleUrl.find("gamulator.com/roms") != std::string::npos &&
-                                   gamulatorOriginalConsoleUrl != "https://www.gamulator.com/roms";
-            
-            if (isConsoleSpecific && !gamulatorSearch.empty()) {
-                // Use console-specific filtering with the original console URL
-                auto result = GamulatorScraperFilter::filterGames(pagination.baseUrl, gamulatorOriginalConsoleUrl, gamulatorSearch, page);
-                applyNewResult(result.first, result.second, page == 1);
-            } else {
-                // Use regular search filtering
-                std::string filterBaseUrl = gamulatorOriginalConsoleUrl.empty() ? pagination.baseUrl : gamulatorOriginalConsoleUrl;
-                auto result = GamulatorScraperFilter::filterGames(filterBaseUrl, *gamulatorModal, gamulatorSearch, page);
-                applyNewResult(result.first, result.second, page == 1);
-            }
-        } else {
-            GamulatorScraper s; auto result = s.fetchGames(pagination.baseUrl, page);
-            applyNewResult(result.first, result.second, page == 1);
-        }
-    } else if (siteType == SiteType::Romspedia) {
+    if (siteType == SiteType::Romspedia) {
         // Check if we have a search URL in pagination.baseUrl (this means we're in search mode)
         bool isSearchUrl = pagination.baseUrl.find("search?search_term_string=") != std::string::npos;
         if (romspediaFilterActive || isSearchUrl) {
@@ -403,231 +301,188 @@ void ListScreen::loadTexture(SDL_Renderer* renderer, int index) {
 }
 
 // --- Render -------------------------------------------------------------------------------
-void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
-    updateTextures(renderer);
-    // Theme background
-    Theme::getInstance().applyBackgroundAlt(renderer);
-    SDL_RenderClear(renderer);
-    int centerX = 1280 / 2;
-    // Draw title with shadow for prominence
-    float titleScale = 1.53f; // 10% smaller than before
-    int titleY = 18; // Move title higher (was 32)
-    // Center the title horizontally by measuring its width
-    int titleW = 0, titleH = 0;
-    TTF_SizeText(font, title.c_str(), &titleW, &titleH);
-    int titleX = centerX - int((titleW * titleScale) / 2);
-    // Shadow
-    UiUtils::RenderText(renderer, font, title, titleX + 2, titleY + 2, UiUtils::Color(0, 0, 0, 120), titleScale);
-    // Main title
-    UiUtils::RenderText(renderer, font, title, titleX, titleY, UiUtils::Color(255, 255, 220), titleScale);
 
-    // Dynamic grid settings based on image presence
-    int gridColumns = 3; // 3 columns for image grid (with images)
-    int tileWidth = 380; // Adjusted for 3 columns
-    int tileHeight = 270; // Reduced height for image cards
-    int tilePadding = 32;
-    int tileVerticalSpacing = 32; // More vertical spacing
-    int visibleRows = 2;
-    bool allNoImages = true;
-    for (const auto& tex : textures) {
-        if (tex) { allNoImages = false; break; }
-    }
-    if (allNoImages) {
-        gridColumns = 3; // Use 3 columns for text-only grids
-        tileWidth = 340; // Wider for more text
-        tileHeight = 110;
-        tilePadding = 18;
-        tileVerticalSpacing = 12;
-        visibleRows = 5;
+void ListScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
+    (void)font;
+    using namespace UiUtils;
+    updateTextures(renderer);
+    const ThemeColors& t = Theme::getInstance().colors();
+    DrawBackground(renderer);
+
+    // ---- Layout ----------------------------------------------------------------
+    const bool imageMode = tallGridMode;
+    const int contentTop = HEADER_H + 8;
+    const int contentBottom = SCREEN_H - FOOTER_H - 4;
+    int gridColumns, cardW, cardH, gapX, gapY, visibleRows;
+    if (imageMode) {
+        gridColumns = 4; gapX = 24; gapY = 24;
+        cardW = (SCREEN_W - 2 * MARGIN_X - (gridColumns - 1) * gapX) / gridColumns;
+        cardH = 254; visibleRows = 2;
+    } else {
+        gridColumns = 3; gapX = 16; gapY = 12;
+        cardW = (SCREEN_W - 2 * MARGIN_X - (gridColumns - 1) * gapX) / gridColumns;
+        cardH = 60; visibleRows = 7;
     }
     currentGridColumns = gridColumns;
     currentVisibleRows = visibleRows;
+    const int rowStep = cardH + gapY;
+    const int totalRows = getTotalRows(gridColumns);
 
-    // --- Smooth scroll animation ---
-    // Lerp scrollOffsetAnim toward scrollOffset
-    float lerpSpeed = 0.33f; // Lower = slower, higher = snappier (increased for smoother, faster animation)
-    scrollOffsetAnim += (scrollOffset - scrollOffsetAnim) * lerpSpeed;
-    if (fabs(scrollOffsetAnim - scrollOffset) < 0.01f) scrollOffsetAnim = (float)scrollOffset;
+    // ---- Header ----------------------------------------------------------------
+    std::string pill;
+    if (pagination.totalPages > 1)
+        pill = "Page " + std::to_string(pagination.currentPage) + " of " + std::to_string(pagination.totalPages);
+    else if (!items.empty())
+        pill = std::to_string(items.size()) + (imageMode ? " games" : " consoles");
+    DrawHeader(renderer, title, romSite, pill);
 
-    visibleRows = std::min(visibleRows, getTotalRows(gridColumns) - scrollOffset);
-    int gridHeight = visibleRows * tileHeight + (visibleRows - 1) * tileVerticalSpacing;
-    int bottomMargin = 170; // More space to ensure cards never overlap help text
-    int startY;
-    if (scrollOffset + visibleRows >= getTotalRows(gridColumns)) {
-        startY = 720 - bottomMargin - gridHeight;
-        if (startY < 50) startY = 50;
-    } else {
-        startY = std::max(50, (720 - gridHeight) / 2);
-    }
-    int startX = (1280 - (gridColumns * tileWidth)) / 2;
-    // Show partial rows during scroll animation for smoothness, only full rows when settled
-    int scrollBase = (int)scrollOffsetAnim;
-    float scrollFrac = scrollOffsetAnim - scrollBase;
-    bool isSettled = fabs(scrollOffsetAnim - scrollOffset) < 0.01f;
-    int rowsToDraw = visibleRows + (isSettled ? 0 : 1);
-    // Preload/queue image loads for visible and just-offscreen items (but do NOT synchronously load in render)
-    int preloadRows = rowsToDraw + 1; // Preload one extra row for smoothness
-    for (int row = 0; row < preloadRows; row++) {
-        for (int col = 0; col < gridColumns; col++) {
+    // ---- Smooth scroll -----------------------------------------------------------
+    scrollOffsetAnim += (scrollOffset - scrollOffsetAnim) * 0.3f;
+    if (std::fabs(scrollOffsetAnim - scrollOffset) < 0.01f) scrollOffsetAnim = (float)scrollOffset;
+    const int scrollBase = (int)std::floor(scrollOffsetAnim);
+    const float scrollFrac = scrollOffsetAnim - scrollBase;
+
+    // Queue cover downloads for visible + next rows (never load synchronously here).
+    for (int row = 0; row < visibleRows + 2; ++row) {
+        for (int col = 0; col < gridColumns; ++col) {
             int index = getIndexFromGrid(scrollBase + row, col, gridColumns);
-            if (index >= 0 && index < items.size()) {
-                // Only queue if not already loaded or queued
-                if (!textures[index] && !items[index].imagePath.empty() && items[index].imagePath.find("http") == 0) {
-                    std::lock_guard<std::mutex> lock(downloadMutex);
-                    if (pendingDownloads.find(index) == pendingDownloads.end()) {
-                        pendingDownloads[index] = items[index].imagePath;
-                    }
-                }
+            if (index >= 0 && index < (int)items.size() && !textures[index] &&
+                items[index].imagePath.find("http") == 0) {
+                std::lock_guard<std::mutex> lock(downloadMutex);
+                if (pendingDownloads.find(index) == pendingDownloads.end())
+                    pendingDownloads[index] = items[index].imagePath;
             }
         }
     }
-    for (int row = 0; row < rowsToDraw; row++) {
-        // --- Fade effect for partial rows ---
-        float rowAlpha = 1.0f;
-        if (!isSettled) {
-            if (row == 0 && scrollFrac > 0.01f) {
-                // Top partial row fades out as it leaves
-                rowAlpha = 1.0f - scrollFrac;
-            } else if (row == rowsToDraw - 1 && scrollFrac > 0.01f) {
-                // Bottom partial row fades in as it appears
-                rowAlpha = scrollFrac;
-            }
-        }
-        Uint8 alpha = (Uint8)(rowAlpha * 255);
-    for (int col = 0; col < gridColumns; col++) {
+
+    // ---- Cards (clipped to the content area so rows scroll under the header) ----
+    SDL_Rect clip{0, contentTop - 16, SCREEN_W, contentBottom - contentTop + 24};
+    SDL_RenderSetClipRect(renderer, &clip);
+    const int gridW = gridColumns * cardW + (gridColumns - 1) * gapX;
+    const int startX = (SCREEN_W - gridW) / 2;
+    const int pulse = (int)(18 * (0.5f + 0.5f * std::sin(SDL_GetTicks() / 260.0f)));
+    TTF_Font* titleFont = GetFont(17);
+    TTF_Font* titleFontBold = GetFont(17, true);
+
+    for (int row = -1; row <= visibleRows + 1; ++row) {
+        for (int col = 0; col < gridColumns; ++col) {
             int index = getIndexFromGrid(scrollBase + row, col, gridColumns);
-            if (index >= 0 && index < items.size()) {
-                int y = startY + row * (tileHeight + tileVerticalSpacing) - (int)((tileHeight + tileVerticalSpacing) * scrollFrac);
-                SDL_Rect tileRect = {startX + col * tileWidth + tilePadding / 2, y, tileWidth - tilePadding, tileHeight};
-                bool isSelected = (index == selectedIndex);
-                // --- Card background with modern color and drop shadow ---
-                SDL_Color cardBg = Theme::getInstance().cardBackground();
-                SDL_Rect shadowRect = tileRect;
-                shadowRect.x += 6; shadowRect.y += 8;
-                SDL_SetRenderDrawColor(renderer, 0, 0, 0, (Uint8)(60 * (rowAlpha)) ); // Drop shadow
-                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-                SDL_RenderFillRect(renderer, &shadowRect);
-                SDL_SetRenderDrawColor(renderer, cardBg.r, cardBg.g, cardBg.b, (Uint8)(210 * (rowAlpha)) );
-                SDL_RenderFillRect(renderer, &tileRect);
-                // --- Rounded corners (approximate) ---
-                drawApproxRoundedBorder(renderer, tileRect, 24, SDL_Color{cardBg.r, cardBg.g, cardBg.b, (Uint8)(210 * (rowAlpha))}, alpha);
-                // --- Selection border ---
-                if (isSelected) {
-                    SDL_Color accent = Theme::getInstance().accentPrimary();
-                    SDL_SetRenderDrawColor(renderer, accent.r, accent.g, accent.b, alpha);
-                    SDL_RenderDrawRect(renderer, &tileRect);
-                }
-                // --- Render image or centered text ---
-                if (index < textures.size() && textures[index]) {
-                    // --- Image area: centered, cover, aspect ratio preserved, cropped if needed ---
-                    int imageMargin = 8;
-                    int helpTextMargin = 10;
-                    int textHeight = 36;
-                    int availableHeight = tileRect.h - imageMargin * 2 - textHeight - helpTextMargin;
-                    int availableWidth = tileRect.w - imageMargin * 2;
-                    int boxX = tileRect.x + imageMargin;
-                    int boxY = tileRect.y + imageMargin;
-                    int boxW = availableWidth;
-                    int boxH = availableHeight;
+            if (index < 0 || index >= (int)items.size()) continue;
+            int y = contentTop + (int)std::lround((row - scrollFrac) * rowStep);
+            if (y > contentBottom || y + cardH < contentTop - 16) continue;
+            SDL_Rect card{startX + col * (cardW + gapX), y, cardW, cardH};
+            const bool sel = (index == selectedIndex);
+            const int radius = imageMode ? 16 : 12;
+            SDL_Color fill = sel ? Mix(t.cardBackground, t.accentPrimary, 0.12f) : t.cardBackground;
+
+            DrawShadow(renderer, card, radius, sel ? 26 : 16, sel ? 140 : 80, sel ? 10 : 6);
+            FillRoundedRect(renderer, card, radius, fill);
+            StrokeRoundedRect(renderer, card, radius, 1, WithAlpha(t.textPrimary, 18));
+            if (sel) DrawFocusRing(renderer, card, radius, t.accentPrimary, 3, 3);
+
+            const std::string label = items[index].label.empty() ? "(No title)" : items[index].label;
+            if (imageMode) {
+                const int inset = 8;
+                SDL_Rect art{card.x + inset, card.y + inset, card.w - 2 * inset, card.h - 2 * inset - 58};
+                SDL_Texture* tex = index < (int)textures.size() ? textures[index] : nullptr;
+                if (tex) {
                     int texW = 0, texH = 0;
-                    SDL_QueryTexture(textures[index], NULL, NULL, &texW, &texH);
-                    float boxAspect = (float)boxW / boxH;
-                    float texAspect = (float)texW / texH;
-                    SDL_Rect dstRect = {boxX, boxY, boxW, boxH};
-                    SDL_Rect srcRect = {0, 0, texW, texH};
-                    if (texAspect > boxAspect) {
-                        int cropW = (int)(texH * boxAspect);
-                        srcRect.x = (texW - cropW) / 2;
-                        srcRect.w = cropW;
-                    } else {
-                        int cropH = (int)(texW / boxAspect);
-                        srcRect.y = (texH - cropH) / 2;
-                        srcRect.h = cropH;
-                    }
-                    SDL_SetTextureAlphaMod(textures[index], alpha);
-                    SDL_RenderCopy(renderer, textures[index], &srcRect, &dstRect);
-                    SDL_SetTextureAlphaMod(textures[index], 255);
-                    // Inner rounding mask (inverse) for image corners
-                    int ir = 18;
-                    SDL_Color cardBgMask = Theme::getInstance().cardBackground();
-                    for (int dx = 0; dx < ir; ++dx) for (int dy = 0; dy < ir; ++dy) if ((dx*dx + dy*dy) > ir*ir) {
-                        SDL_SetRenderDrawColor(renderer, cardBgMask.r, cardBgMask.g, cardBgMask.b, (Uint8)(210 * (rowAlpha)) );
-                        SDL_RenderDrawPoint(renderer, dstRect.x + dx, dstRect.y + dy);
-                        SDL_RenderDrawPoint(renderer, dstRect.x + dstRect.w-1-dx, dstRect.y + dy);
-                        SDL_RenderDrawPoint(renderer, dstRect.x + dx, dstRect.y + dstRect.h-1-dy);
-                        SDL_RenderDrawPoint(renderer, dstRect.x + dstRect.w-1-dx, dstRect.y + dstRect.h-1-dy);
-                    }
-                    int titleY = tileRect.y + tileRect.h - textHeight - 8;
-                    std::string labelText = items[index].label.empty() ? "(No Title)" : items[index].label;
-    std::string clampedLabel = UiUtils::ClampTextToLines(labelText, font, tileRect.w - 8, 2);
-                    SDL_Rect textBox = {tileRect.x, titleY, tileRect.w, textHeight};
-    UiUtils::Color textColor = isSelected ? UiUtils::Color(255, 255, 80, alpha) : UiUtils::Color(255, 255, 255, alpha);
-    UiUtils::RenderTextCenteredInBox(renderer, font, clampedLabel, textBox, textColor);
+                    SDL_QueryTexture(tex, nullptr, nullptr, &texW, &texH);
+                    SDL_Rect src{0, 0, texW, texH};
+                    float boxAspect = (float)art.w / art.h, texAspect = texH ? (float)texW / texH : boxAspect;
+                    if (texAspect > boxAspect) { int cw = (int)(texH * boxAspect); src.x = (texW - cw) / 2; src.w = cw; }
+                    else { int ch = (int)(texW / boxAspect); src.y = (texH - ch) / 6; src.h = ch; }  // keep box-art logos (top) visible
+                    SDL_SetTextureAlphaMod(tex, 255);
+                    SDL_RenderCopy(renderer, tex, &src, &art);
                 } else {
-                    // --- Placeholder for not-yet-loaded images ---
-                    SDL_SetRenderDrawColor(renderer, 60, 60, 80, alpha); // Subtle placeholder color
-                    SDL_RenderFillRect(renderer, &tileRect);
-                    std::string labelText = items[index].label.empty() ? "(No Title)" : items[index].label;
-                    std::string clampedLabel = UiUtils::ClampTextToLines(labelText, font, tileRect.w - 8, 2);
-                    SDL_Rect textBox = tileRect;
-                    UiUtils::Color textColor = isSelected ? UiUtils::Color(255, 255, 80, alpha) : UiUtils::Color(200, 200, 200, alpha);
-                    UiUtils::RenderTextCenteredInBox(renderer, font, clampedLabel, textBox, textColor);
+                    FillRoundedRect(renderer, art, 10, Lighten(fill, 0.04f + pulse / 900.0f));
+                    if (!items[index].imagePath.empty())
+                        DrawSpinner(renderer, art.x + art.w / 2, art.y + art.h / 2, 12, WithAlpha(t.textSecondary, 160));
+                }
+                MaskCorners(renderer, art, 10, fill);
+
+                TTF_Font* tf = sel ? titleFontBold : titleFont;
+                std::vector<std::string> lines = WrapText(tf, label, art.w);
+                if (lines.size() > 2) {
+                    std::string rest = lines[1];
+                    for (size_t i = 2; i < lines.size(); ++i) rest += " " + lines[i];
+                    lines.resize(2);
+                    lines[1] = rest;
+                }
+                int ty = art.y + art.h + 8;
+                for (auto& l : lines) {
+                    DrawText(renderer, tf, Ellipsize(tf, l, art.w), art.x + 2, ty, sel ? t.textPrimary : t.textSecondary);
+                    ty += 22;
+                }
+            } else {
+                std::string name, count;
+                SplitTrailingCount(label, name, count);
+                TTF_Font* nf = sel ? GetFont(18, true) : GetFont(18);
+                TTF_Font* cf = GetFont(14, true);
+                int pad = 18;
+                int countW = count.empty() ? 0 : PillWidth(cf, count, 10) + 12;
+                // accent bar on the selected row
+                if (sel) FillRoundedRect(renderer, SDL_Rect{card.x + 8, card.y + 14, 4, card.h - 28}, 2, t.accentPrimary);
+                std::string shown = Ellipsize(nf, name, card.w - 2 * pad - countW);
+                DrawText(renderer, nf, shown, card.x + pad, card.y + (card.h - TextHeight(nf)) / 2, sel ? t.textPrimary : Mix(t.textSecondary, t.textPrimary, 0.45f));
+                if (!count.empty()) {
+                    int pw = PillWidth(cf, count, 10);
+                    DrawPill(renderer, cf, count, card.x + card.w - pad - pw, card.y + (card.h - 24) / 2,
+                             sel ? WithAlpha(t.accentPrimary, 60) : WithAlpha(t.textPrimary, 16),
+                             sel ? t.textHighlight : t.textSecondary, 10, 24);
                 }
             }
         }
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
     }
-    // --- Draw vertical scrollbar ---
-    int totalRows = getTotalRows(gridColumns);
+    SDL_RenderSetClipRect(renderer, nullptr);
+    // Soft edges where rows scroll under the header / footer.
+    if (scrollOffsetAnim > 0.01f) DrawEdgeFade(renderer, contentTop - 16, 22, false);
+    if (totalRows > scrollBase + visibleRows) DrawEdgeFade(renderer, contentBottom - 26, 34, true);
+
+    // ---- Empty state ---------------------------------------------------------------
+    if (items.empty()) {
+        int cy = (contentTop + contentBottom) / 2;
+        RenderTextCentered(renderer, GetFont(24, true), "Nothing here", SCREEN_W / 2, cy - 16, Color(t.textPrimary));
+        RenderTextCentered(renderer, GetFont(18), "Try another search or filter.", SCREEN_W / 2, cy + 18, Color(t.textSecondary));
+    }
+
+    // ---- Scrollbar ---------------------------------------------------------------------
     if (totalRows > visibleRows) {
-        int barX = 1260; // near right edge
-        int barY = startY;
-        int barW = 12;
-        int barH = gridHeight;
-        SDL_SetRenderDrawColor(renderer, 80, 80, 100, 180);
-        SDL_Rect bgRect = {barX, barY, barW, barH};
-        SDL_RenderFillRect(renderer, &bgRect);
-        // Thumb
-        float thumbH = (float)visibleRows / totalRows * barH;
-        float thumbY = barY + ((float)scrollOffset / totalRows) * barH;
-        SDL_SetRenderDrawColor(renderer, 220, 220, 80, 220);
-        SDL_Rect thumbRect = {barX, (int)thumbY, barW, (int)thumbH};
-        SDL_RenderFillRect(renderer, &thumbRect);
-    }
-    // Move help text slightly lower to visually align with page info
-    std::string helpText = "Press A to select, B to go back, Y to search/filter";
-    UiUtils::RenderTextCentered(renderer, font, helpText, centerX, 720 - 20, UiUtils::Color(255, 255, 255));
-
-    // Move page info to the far left
-    if (pagination.totalPages > 1) {
-        std::string pageInfo = "Page " + std::to_string(pagination.currentPage) + " of " + std::to_string(pagination.totalPages);
-        UiUtils::RenderText(renderer, font, pageInfo, 30, 720 - 30, UiUtils::Color(255, 255, 255));
-        if (pagination.currentPage > 1) {
-            UiUtils::RenderTextCentered(renderer, font, "<", 100, 720 - 30, UiUtils::Color(255, 255, 255));
-        }
-        if (pagination.currentPage < pagination.totalPages) {
-            UiUtils::RenderTextCentered(renderer, font, ">", 1280 - 100, 720 - 30, UiUtils::Color(255, 255, 255));
-        }
-    }
-    if (loadingMore) {
-        // Move 'Loading more...' to the far right, aligned with help text and page info
-        UiUtils::RenderText(renderer, font, "Loading more...", 1280 - 260, 720 - 30, UiUtils::Color(220, 220, 120));
+        int barH = visibleRows * rowStep - gapY;
+        float pos = scrollOffsetAnim / std::max(1, totalRows - visibleRows);
+        DrawScrollbar(renderer, SCREEN_W - 22, contentTop, barH, (float)visibleRows / totalRows, pos);
     }
 
-    // --- Filter Modal UI ---
-    if (siteType == SiteType::Gamulator && gamulatorModal && gamulatorModal->isVisible()) {
-        int modalW = 800, modalH = 500; int modalX = (1280 - modalW)/2, modalY = (720 - modalH)/2;
-        gamulatorModal->render(renderer, font, modalX, modalY, modalW, modalH);
-    } else if (siteType == SiteType::Hexrom && hexromModal && hexromModal->isVisible()) {
-        int modalW = 800, modalH = 500; int modalX = (1280 - modalW)/2, modalY = (720 - modalH)/2;
-        hexromModal->render(renderer, font, modalX, modalY, modalW, modalH);
-    } else if (siteType == ListScreen::SiteType::Romspedia && romspediaModal && romspediaModal->isVisible()) {
-        int modalW = 800, modalH = 500; int modalX = (1280 - modalW)/2, modalY = (720 - modalH)/2;
-        romspediaModal->render(renderer, font, modalX, modalY, modalW, modalH);
+    bool modalVisible = (siteType == SiteType::Hexrom && hexromModal && hexromModal->isVisible()) ||
+                        (siteType == SiteType::Romspedia && romspediaModal && romspediaModal->isVisible());
+
+    // ---- Footer (the modal draws its own hints) -----------------------------------
+    if (modalVisible) {
+        // skip
+    } else if (loadingMore) {
+        DrawFooterStatus(renderer, "Loading more…", true);
+    } else if (!items.empty()) {
+        DrawFooterStatus(renderer, std::to_string(selectedIndex + 1) + " / " + std::to_string(items.size()));
+    }
+    if (!modalVisible) {
+        std::vector<Hint> hints = {{"DPAD", "Navigate"}};
+        if (pagination.totalPages > 1) hints.push_back({"LR", "Page"});
+        hints.push_back({"Y", "Search"});
+        hints.push_back({"A", "Open"});
+        hints.push_back({"B", "Back"});
+        DrawHints(renderer, hints);
+    }
+
+    // ---- Filter modal --------------------------------------------------------------
+    if (modalVisible) {
+        DrawScrim(renderer);
+        int modalW = 800, modalH = 472;
+        int modalX = (SCREEN_W - modalW) / 2, modalY = (SCREEN_H - modalH) / 2;
+        if (siteType == SiteType::Hexrom) hexromModal->render(renderer, GetFont(20), modalX, modalY, modalW, modalH);
+        else romspediaModal->render(renderer, GetFont(20), modalX, modalY, modalW, modalH);
     }
 }
 
-// Append a new page of items and adjust scroll so new content becomes visible seamlessly.
 void ListScreen::appendItems(const std::vector<ListItem>& newItems, const PaginationInfo& newPagination) {
     // Prevent multiple appends at once
     if (loadingMore) {
@@ -725,9 +580,7 @@ void ListScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
         bool isConsoleMenu = false;
         if (title == "Consoles" || title == "Console Menu" || title == "Select Console") isConsoleMenu = true;
         if (!isConsoleMenu) {
-            if (siteType == SiteType::Gamulator && gamulatorModal) {
-                gamulatorModal->showModal(!gamulatorModal->isVisible());
-            } else if (siteType == SiteType::Hexrom && hexromModal) {
+            if (siteType == SiteType::Hexrom && hexromModal) {
                 hexromModal->showModal(!hexromModal->isVisible());
             } else if (siteType == SiteType::Romspedia && romspediaModal) {
                 romspediaModal->showModal(!romspediaModal->isVisible());
@@ -737,8 +590,6 @@ void ListScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
     }
 
     // Delegate filter modal input
-    if (siteType == SiteType::Gamulator && gamulatorModal && gamulatorModal->isVisible()) {
-        gamulatorModal->handleInput(e); return; }
     if (siteType == SiteType::Hexrom && hexromModal && hexromModal->isVisible()) {
         hexromModal->handleInput(e); return; }
     if (siteType == ListScreen::SiteType::Romspedia && romspediaModal && romspediaModal->isVisible()) {
@@ -786,8 +637,7 @@ void ListScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
                 if (pagination.totalPages > 1 && pagination.currentPage > 1) {
                     int targetPage = pagination.currentPage - 1;
                     if (targetPage < 1) break;
-                    // For Hexrom use scraper directly; Gamulator simple backward not implemented (could be added)
-                    if (!isGamulator(romSite)) {
+                    {
                         HexromScraper s; auto result = s.fetchGames(pagination.baseUrl, targetPage);
                         items = result.first; pagination = result.second;
                         selectedIndex = 0; scrollOffset = 0; textures.clear(); textures.resize(items.size(), nullptr);

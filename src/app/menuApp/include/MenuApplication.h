@@ -16,7 +16,6 @@
 #include "../../../utils/include/UpdateChecker.h"
 #include "../../../scraper/SiteScraper.h"
 #include "../../../scraper/Hexrom/include/HexromScraper.h"
-#include "../../../scraper/Gamulator/include/GamulatorScraper.h"
 #include "../../../scraper/GithubReleases/include/GitHubReleasesScraper.h"
 #include "../../../scraper/Romspedia/include/RomspediaScraper.h"
 #include "../../consolePolicies/ConsoleFolderMap.h"

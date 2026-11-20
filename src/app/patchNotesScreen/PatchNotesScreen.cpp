@@ -3,105 +3,154 @@
 
 PatchNotesScreen::PatchNotesScreen() {}
 
-void PatchNotesScreen::setNotes(const std::vector<std::string>& n) {
-    notes = n;
-    wrappedLines.clear();
-    scrollOffset = 0;
-    const int maxWidth = 1100;
-    // Use the font already loaded by the app (assume InterVariable.ttf, size 20)
-    TTF_Font* font = TTF_OpenFont("res/InterVariable.ttf", 20);
-    if (!font) return;
-    for (const auto& para : notes) {
-        if (para.empty()) {
-            wrappedLines.push_back("");
-            continue;
-        }
-        // Use SDL_ttf to wrap the paragraph
-        SDL_Surface* surface = TTF_RenderText_Blended_Wrapped(font, para.c_str(), {255,255,255,255}, maxWidth);
-        if (!surface) {
-            wrappedLines.push_back(para);
-            continue;
-        }
-        // Extract lines from the surface (simulate line splitting)
-        // We'll split manually on '\n' for now
-        size_t start = 0, end = 0;
-        while ((end = para.find('\n', start)) != std::string::npos) {
-            std::string line = para.substr(start, end - start);
-            if (!line.empty()) wrappedLines.push_back(line);
-            start = end + 1;
-        }
-        if (start < para.size()) wrappedLines.push_back(para.substr(start));
-        SDL_FreeSurface(surface);
+// Drop emoji (U+1F000 and up) and variation selectors: the UI font has no glyphs
+// for them, so they would render as empty boxes. Symbols like the warning sign stay.
+static std::string stripEmoji(const std::string& in) {
+    std::string out;
+    out.reserve(in.size());
+    for (size_t i = 0; i < in.size();) {
+        unsigned char c = (unsigned char)in[i];
+        size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 1;
+        if (i + len > in.size()) len = 1;
+        bool drop = false;
+        if (len == 4) drop = true;  // supplementary planes: emoji
+        if (len == 3 && c == 0xEF && (unsigned char)in[i + 1] == 0xB8 &&
+            ((unsigned char)in[i + 2] & 0xF0) == 0x80) drop = true;  // U+FE00..FE0F variation selectors
+        if (len == 3 && c == 0xE2 && (unsigned char)in[i + 1] == 0x80 && (unsigned char)in[i + 2] == 0x8D) drop = true;  // ZWJ
+        if (!drop) out.append(in, i, len);
+        i += len;
     }
-    TTF_CloseFont(font);
+    // collapse the space left behind at the start, e.g. "[H2]<emoji> Plunder" -> "[H2]Plunder"
+    size_t tag = out.rfind("[H", 0) == 0 ? out.find(']') : std::string::npos;
+    size_t start = tag == std::string::npos ? 0 : tag + 1;
+    size_t firstText = out.find_first_not_of(' ', start);
+    if (firstText != std::string::npos && firstText > start) out.erase(start, firstText - start);
+    return out;
+}
+
+void PatchNotesScreen::setNotes(const std::vector<std::string>& n) {
+    notes.clear();
+    for (const auto& line : n) notes.push_back(stripEmoji(line));
+    wrappedLines.clear();
+    rowKinds.clear();
+    rowLevels.clear();
+    layoutWidth = -1;  // re-laid out on next render with the real fonts
+    scrollOffset = 0;
+}
+
+static TTF_Font* headingFont(int level) {
+    return UiUtils::GetFont(level <= 1 ? 26 : (level == 2 ? 23 : 20), true);
+}
+
+void PatchNotesScreen::layout(int width) {
+    using namespace UiUtils;
+    wrappedLines.clear();
+    rowKinds.clear();
+    rowLevels.clear();
+    TTF_Font* body = GetFont(18);
+    auto push = [this](const std::string& text, char kind, int level = 0) {
+        wrappedLines.push_back(text); rowKinds.push_back(kind); rowLevels.push_back(level);
+    };
+    for (size_t i = 0; i < notes.size(); ++i) {
+        std::string line = notes[i];
+        if (line == "---") { push("", '-'); continue; }
+        if (line.rfind("[H", 0) == 0 && line.find(']') != std::string::npos) {
+            size_t close = line.find(']');
+            int level = 1;
+            try { level = std::stoi(line.substr(2, close - 2)); } catch (...) {}
+            std::string text = line.substr(close + 1);
+            while (text.find("[/H]") == std::string::npos && i + 1 < notes.size()) text += " " + notes[++i];
+            size_t endTag = text.find("[/H]");
+            if (endTag != std::string::npos) text = text.substr(0, endTag);
+            if (!rowKinds.empty() && rowKinds.back() != 'e' && rowKinds.back() != '-') push("", 'e');
+            for (auto& l : WrapText(headingFont(level), text, width)) push(l, 'H', level);
+            continue;
+        }
+        if (line.empty()) {
+            if (rowKinds.empty() || rowKinds.back() != 'e') push("", 'e');
+            continue;
+        }
+        if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
+            auto lines = WrapText(body, line.substr(2), width - 26);
+            for (size_t k = 0; k < lines.size(); ++k) push(lines[k], k == 0 ? 'b' : 'c');
+            continue;
+        }
+        for (auto& l : WrapText(body, line, width)) push(l, 'p');
+    }
+    while (!rowKinds.empty() && rowKinds.back() == 'e') { wrappedLines.pop_back(); rowKinds.pop_back(); rowLevels.pop_back(); }
+    layoutWidth = width;
+}
+
+static int rowHeight(char kind, int level) {
+    switch (kind) {
+        case 'H': return level <= 1 ? 38 : 33;
+        case '-': return 26;
+        case 'e': return 12;
+        default: return 28;
+    }
 }
 
 void PatchNotesScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
-    // Theme background
-    Theme::getInstance().applyBackgroundAlt(renderer);
-    SDL_RenderClear(renderer);
-    int x = 80, y = 60;
-    UiUtils::RenderText(renderer, font, "Patch Notes", x, y, UiUtils::Color(255,255,80), 1.5f);
-    y += 50;
-    int lineHeight = 32;
-    int totalLines = wrappedLines.size();
-    int visibleEnd = std::min(totalLines, scrollOffset + maxVisibleLines);
-    for (int i = scrollOffset; i < visibleEnd; ++i) {
-        std::string& line = wrappedLines[i];
-        // Separator for boxes (--- marker)
-        if (line == "---") {
-            y += 10;
-            SDL_SetRenderDrawColor(renderer, 120, 120, 120, 180);
-            SDL_Rect sepRect = {x, y, 1100, 2};
-            SDL_RenderFillRect(renderer, &sepRect);
-            y += 18;
-            continue;
-        }
-        // Heading detection: [H1]..[/H], [H2]..[/H], etc.
-        if (line.rfind("[H", 0) == 0 && line.find("]") != std::string::npos) {
-            size_t close = line.find("]");
-            int level = 1;
-            try { level = std::stoi(line.substr(2, close-2)); } catch (...) {}
-            std::string headingText = line.substr(close+1);
-            // Find closing [/H] in this or next lines
-            while (headingText.find("[/H]") == std::string::npos && i+1 < totalLines) {
-                headingText += "\n" + wrappedLines[++i];
-            }
-            size_t endTag = headingText.find("[/H]");
-            if (endTag != std::string::npos) headingText = headingText.substr(0, endTag);
-            float scale = 1.08f + 0.08f * (6 - std::min(level, 6)); // H1 biggest, but less large
-            int boldLineHeight = int(lineHeight * scale) + 6;
-            // Add space above heading if previous line is not empty or a separator
-            if (i == scrollOffset || (i > 0 && !wrappedLines[i-1].empty() && wrappedLines[i-1] != "---")) {
-                y += 8;
-            }
-            UiUtils::RenderText(renderer, font, headingText, x, y, UiUtils::Color(255,255,255), scale);
-            y += boldLineHeight + 8; // extra space after heading
-            continue;
-        }
-        // List item: starts with "- "
-        if (line.rfind("- ", 0) == 0) {
-            UiUtils::RenderTextWrapped(renderer, font, line, x+16, y, 1080, UiUtils::Color(220,220,220));
-            y += lineHeight; // tighter spacing for lists
-            continue;
-        }
-        // Normal paragraph
-        UiUtils::RenderTextWrapped(renderer, font, line, x, y, 1100, UiUtils::Color(220,220,220));
-        y += lineHeight + 2;
+    (void)font;
+    using namespace UiUtils;
+    const ThemeColors& t = Theme::getInstance().colors();
+    DrawBackground(renderer);
+    DrawHeader(renderer, "Patch Notes", "Plunder", "What's new");
+
+    SDL_Rect panel{MARGIN_X, HEADER_H + 8, SCREEN_W - 2 * MARGIN_X, SCREEN_H - FOOTER_H - HEADER_H - 16};
+    DrawPanel(renderer, panel, 22, false);
+    const int padX = 36, padY = 24;
+    const int textX = panel.x + padX;
+    const int textW = panel.w - 2 * padX - 16;
+
+    if (notes.empty()) {
+        DrawSpinner(renderer, SCREEN_W / 2, panel.y + panel.h / 2 - 18, 18, t.accentPrimary);
+        RenderTextCentered(renderer, GetFont(18), "Fetching release notes…", SCREEN_W / 2, panel.y + panel.h / 2 + 24, Color(t.textSecondary));
+        DrawHints(renderer, {{"B", "Back"}});
+        return;
     }
-    // Scrollbar
-    if (totalLines > maxVisibleLines) {
-        int barX = 1200, barY = 110;
-        int barW = 10, barH = maxVisibleLines * lineHeight;
-        float thumbH = (float)maxVisibleLines / totalLines * barH;
-        float thumbY = barY + ((float)scrollOffset / (totalLines - maxVisibleLines)) * (barH - thumbH);
-        SDL_SetRenderDrawColor(renderer, 80, 80, 100, 100);
-        SDL_Rect bgRect = {barX, barY, barW, barH};
-        SDL_RenderFillRect(renderer, &bgRect);
-        SDL_SetRenderDrawColor(renderer, 220, 220, 80, 160);
-        SDL_Rect thumbRect = {barX, (int)thumbY, barW, (int)thumbH};
-        SDL_RenderFillRect(renderer, &thumbRect);
+    if (layoutWidth != textW) layout(textW);
+
+    TTF_Font* body = GetFont(18);
+    const int totalRows = (int)wrappedLines.size();
+    int y = panel.y + padY;
+    const int limit = panel.y + panel.h - padY;
+    int shown = 0;
+    for (int i = scrollOffset; i < totalRows; ++i) {
+        int hgt = rowHeight(rowKinds[i], rowLevels[i]);
+        if (y + hgt > limit) break;
+        const std::string& text = wrappedLines[i];
+        switch (rowKinds[i]) {
+            case 'H': {
+                TTF_Font* hf = headingFont(rowLevels[i]);
+                DrawText(renderer, hf, text, textX, y + (hgt - TextHeight(hf)) / 2, rowLevels[i] <= 1 ? t.textPrimary : Mix(t.textPrimary, t.accentPrimary, 0.35f));
+                break;
+            }
+            case '-':
+                FillRoundedRect(renderer, SDL_Rect{textX, y + hgt / 2, textW, 1}, 0, WithAlpha(t.textPrimary, 30));
+                break;
+            case 'b':
+                FillCircle(renderer, textX + 8, y + hgt / 2, 3, t.accentPrimary);
+                DrawText(renderer, body, text, textX + 26, y + (hgt - TextHeight(body)) / 2, Mix(t.textSecondary, t.textPrimary, 0.55f));
+                break;
+            case 'c':
+                DrawText(renderer, body, text, textX + 26, y + (hgt - TextHeight(body)) / 2, Mix(t.textSecondary, t.textPrimary, 0.55f));
+                break;
+            case 'p':
+                DrawText(renderer, body, text, textX, y + (hgt - TextHeight(body)) / 2, Mix(t.textSecondary, t.textPrimary, 0.55f));
+                break;
+            default: break;
+        }
+        y += hgt;
+        ++shown;
     }
+    maxVisibleLines = std::max(1, shown);
+    if (totalRows > maxVisibleLines) {
+        int maxOffset = std::max(1, totalRows - maxVisibleLines);
+        DrawScrollbar(renderer, panel.x + panel.w - 22, panel.y + padY, panel.h - 2 * padY,
+                      (float)maxVisibleLines / totalRows, (float)scrollOffset / maxOffset);
+    }
+    DrawHints(renderer, {{"DPAD", "Scroll"}, {"B", "Back"}});
 }
 
 void PatchNotesScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {

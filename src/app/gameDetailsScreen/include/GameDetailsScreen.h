@@ -57,6 +57,9 @@ class GameDetailsScreen : public Screen {
         SDL_Texture* iconTexture = nullptr;
         int aboutScrollOffset = 0;
         int aboutMaxVisibleLines = 0;
+        int aboutTotalLines = 0;
+        int aboutWrapWidth = -1;            // width aboutWrapped was computed for
+        std::vector<std::string> aboutWrapped;
         bool buttonFocused = false; // True if download button is focused
         Uint32 buttonFocusStart = 0; // For animation timing
         float buttonBorderAnim = 0.0f; // 0.0 = corners, 1.0 = full border

@@ -53,7 +53,7 @@ void DownloadManager::downloadWorker(const std::string& url, const std::string& 
     long size = getRemoteFileSize(url);
     if (size > 0) downloadTotalBytes = size;
     
-    std::string referer = url.find("gamulator.com") != std::string::npos ? "https://www.gamulator.com/" : "https://hexrom.com/";
+    std::string referer = "https://hexrom.com/";
     
     // Fork & exec curl so we can poll file size
     pid_t pid = fork();

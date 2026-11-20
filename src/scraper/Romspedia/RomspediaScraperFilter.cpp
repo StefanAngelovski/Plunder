@@ -158,7 +158,7 @@ static std::vector<ListItem> parseAndFilterSearchResults(const std::string& html
     return games;
 }
 
-// Console-specific filtering function (similar to GamulatorScraperFilter)
+// Console-specific filtering function
 std::pair<std::vector<ListItem>, PaginationInfo> RomspediaScraperFilter::filterGames(
     const std::string& searchUrl, 
     const std::string& consoleUrl, 

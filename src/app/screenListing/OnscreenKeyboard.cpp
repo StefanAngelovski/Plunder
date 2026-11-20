@@ -1,4 +1,5 @@
 #include "include/OnscreenKeyboard.h"
+#include "../../utils/include/Theme.h"
 
 OnscreenKeyboard::OnscreenKeyboard()
     : mode(Mode::Letters), caps(false), row(0), col(0) {
@@ -64,54 +65,50 @@ void OnscreenKeyboard::updateRows() {
 }
 
 void OnscreenKeyboard::render(SDL_Renderer* renderer, TTF_Font* font, int x, int y, int w, int h) {
-    // Keyboard rendering logic
-    int keyW = 64, keyH = 48, spacing = 8;
-    int kbRows = currentRows.size();
-    int kbCols = 10; // Longest row
-    int kbW = kbCols * keyW + (kbCols - 1) * spacing;
-    int kbH = kbRows * (keyH + spacing);
-    int kbX = x;
-    int kbY = y;
-    // Draw keyboard background
-    SDL_Color kbShadow = {0, 0, 0, 120};
-    SDL_Color kbBg = {54, 20, 80, 235}; // Deep purple/navy
-    SDL_Color kbBorder = {0, 255, 200, 255}; // Bright aqua border
-    SDL_Rect shadowRect = {kbX - 20, kbY - 20, kbW + 40, kbH + 40};
-    SDL_SetRenderDrawColor(renderer, kbShadow.r, kbShadow.g, kbShadow.b, kbShadow.a);
-    SDL_RenderFillRect(renderer, &shadowRect);
-    SDL_Rect bgRect = {kbX - 16, kbY - 16, kbW + 32, kbH + 32};
-    SDL_SetRenderDrawColor(renderer, kbBg.r, kbBg.g, kbBg.b, kbBg.a);
-    SDL_RenderFillRect(renderer, &bgRect);
-    SDL_SetRenderDrawColor(renderer, kbBorder.r, kbBorder.g, kbBorder.b, kbBorder.a);
-    SDL_RenderDrawRect(renderer, &bgRect);
+    (void)font; (void)w; (void)h;
+    using namespace UiUtils;
+    const ThemeColors& t = Theme::getInstance().colors();
+    const int keyW = 64, keyH = 50, spacing = 8;
+    const int kbRows = (int)currentRows.size();
+    const int kbCols = 10;
+    const int kbW = kbCols * keyW + (kbCols - 1) * spacing;
+    const int kbH = kbRows * keyH + (kbRows - 1) * spacing;
+    SDL_Rect panel{x - 16, y - 16, kbW + 32, kbH + 32};
+    DrawShadow(renderer, panel, 20, 28, 160, 10);
+    FillRoundedRect(renderer, panel, 20, Darken(t.cardBackground, 0.25f));
+    StrokeRoundedRect(renderer, panel, 20, 1, WithAlpha(t.textPrimary, 22));
+    TTF_Font* keyFont = GetFont(20, true);
+    TTF_Font* specialFont = GetFont(14, true);
     for (int r = 0; r < kbRows; ++r) {
-        int rowY = kbY + r * (keyH + spacing);
-        auto keys = currentRows[r];
+        const std::string& keys = currentRows[r];
         int numKeys = (int)keys.size();
         int rowWidth = numKeys * keyW + (numKeys - 1) * spacing;
-        int rowStartX = kbX + (kbW - rowWidth) / 2;
+        int rowStartX = x + (kbW - rowWidth) / 2;
+        int rowY = y + r * (keyH + spacing);
         for (int c = 0; c < numKeys; ++c) {
-            int keyX = rowStartX + c * (keyW + spacing);
-            SDL_Rect keyRect = {keyX, rowY, keyW, keyH};
-            // Highlight selected key
-            if (r == row && c == col) {
-                SDL_SetRenderDrawColor(renderer, 120, 200, 255, 255);
-                SDL_RenderFillRect(renderer, &keyRect);
-            } else {
-                SDL_SetRenderDrawColor(renderer, 60, 120, 180, 180);
-                SDL_RenderFillRect(renderer, &keyRect);
-            }
-            SDL_SetRenderDrawColor(renderer, 80, 200, 255, 255);
-            SDL_RenderDrawRect(renderer, &keyRect);
-            // Draw key label (special keys as text)
-            std::string label;
+            SDL_Rect key{rowStartX + c * (keyW + spacing), rowY, keyW, keyH};
+            bool sel = (r == row && c == col);
             unsigned char code = keys[c];
-            if (code == 0x08) label = "<="; // Backspace
-            else if (code == 0x1a) label = "->"; // Enter
+            bool special = code == 0x08 || code == 0x1a || code == 0x18 || code == 0x19;
+            std::string label;
+            if (code == 0x08) label = "Delete";
+            else if (code == 0x1a) label = "Done";
             else if (code == 0x18) label = (mode == Mode::Letters ? "Shift" : "ABC");
             else if (code == 0x19) label = (mode == Mode::Letters ? "?123" : "ABC");
             else label = std::string(1, keys[c]);
-            UiUtils::RenderTextCentered(renderer, font, label, keyX + keyW / 2, rowY + keyH / 2, UiUtils::Color(255,255,255));
+            SDL_Color fill = sel ? t.accentPrimary : (special ? Lighten(t.cardBackground, 0.02f) : Lighten(t.cardBackground, 0.10f));
+            if (sel) DrawShadow(renderer, key, 10, 12, 140, 4);
+            FillRoundedRect(renderer, key, 10, fill);
+            SDL_Color fg = sel ? t.backgroundDark : (special ? t.textSecondary : t.textPrimary);
+            if (code == ' ') {
+                // space bar glyph
+                SDL_Color g = sel ? t.backgroundDark : t.textSecondary;
+                FillRoundedRect(renderer, SDL_Rect{key.x + keyW / 2 - 12, key.y + keyH / 2 + 4, 24, 3}, 1, g);
+                FillRoundedRect(renderer, SDL_Rect{key.x + keyW / 2 - 12, key.y + keyH / 2 - 3, 3, 8}, 1, g);
+                FillRoundedRect(renderer, SDL_Rect{key.x + keyW / 2 + 9, key.y + keyH / 2 - 3, 3, 8}, 1, g);
+            } else {
+                RenderTextCentered(renderer, special ? specialFont : keyFont, label, key.x + keyW / 2, key.y + keyH / 2, Color(fg));
+            }
         }
     }
 }

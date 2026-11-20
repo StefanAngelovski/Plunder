@@ -72,13 +72,6 @@ Nintendo Wii (WII)
 PS2 Playstation 2 ROMs
 Sharp X68000
 
-# Gamulator unsupported consoles
-Nintendo Wii
-CD-i
-C64 Preservation
-C64 Tapes
-Turbo Duo
-
 # Romspedia unsupported consoles
 PS2 ROMs
 3DS ROMs

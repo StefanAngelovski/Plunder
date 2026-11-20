@@ -1,133 +1,87 @@
 #include "include/HexromFilterModal.h"
+#include "../../utils/include/Theme.h"
 
 HexromFilterModal::HexromFilterModal() {
     filterDropdownOptions = {"Search", "Region", "Sort", "Order", "Genre"};
 }
 
+namespace {
+// Small downward chevron drawn from horizontal strokes.
+void drawChevron(SDL_Renderer* r, int cx, int cy, SDL_Color c) {
+    for (int i = 0; i < 5; ++i)
+        UiUtils::FillRoundedRect(r, SDL_Rect{cx - 5 + i, cy - 2 + i, 11 - 2 * i, 2}, 0, c);
+}
+}  // namespace
+
 void HexromFilterModal::render(SDL_Renderer* renderer, TTF_Font* font, int x, int y, int width, int height) {
-    // --- Filter Modal UI (migrated from ListScreen) ---
-    int modalW = width, modalH = height;
-    int modalX = x, modalY = y;
-    // Teal blue style
-    SDL_Color modalBg = {36, 120, 160, 240};      // Teal blue
-    SDL_Color modalBorder = {80, 200, 255, 255};  // Bright teal
-    SDL_Color modalShadow = {0, 0, 0, 100};       // Shadow
+    (void)font;
+    using namespace UiUtils;
+    const ThemeColors& t = Theme::getInstance().colors();
+    SDL_Rect modal{x, y, width, height};
+    DrawPanel(renderer, modal, 24);
+    DrawText(renderer, GetFont(24, true), "Search & filter", x + 32, y + 26, t.textPrimary);
 
-    // Draw drop shadow
-    SDL_Rect shadowRect = { modalX + 8, modalY + 8, modalW, modalH };
-    SDL_SetRenderDrawColor(renderer, modalShadow.r, modalShadow.g, modalShadow.b, modalShadow.a);
-    SDL_RenderFillRect(renderer, &shadowRect);
-
-    // Draw modal background
-    SDL_Rect modalRect = {modalX, modalY, modalW, modalH};
-    SDL_SetRenderDrawColor(renderer, modalBg.r, modalBg.g, modalBg.b, modalBg.a);
-    SDL_RenderFillRect(renderer, &modalRect);
-
-    // Draw modal border
-    SDL_SetRenderDrawColor(renderer, modalBorder.r, modalBorder.g, modalBorder.b, modalBorder.a);
-    SDL_RenderDrawRect(renderer, &modalRect);
-
-    UiUtils::RenderTextCentered(renderer, font, "Filter/Search ROMs", 1280/2, modalY + 40, UiUtils::Color(255,255,255));
-    int yPos = modalY + 100;
-    // Dropdown focus highlight
-    int dropdownCount = 5; // Search, Region, Sort, Order, Genre
-    for (int i = 0; i < dropdownCount; ++i) {
-        if (i == filterDropdownFocus && !filterDropdownPulldown) {
-            SDL_Rect focusRect = {modalX + 40, yPos-8 + i*60, 700, 44};
-            SDL_SetRenderDrawColor(renderer, 60, 120, 220, 180);
-            SDL_RenderDrawRect(renderer, &focusRect);
+    TTF_Font* labelFont = GetFont(17);
+    TTF_Font* valueFont = GetFont(18);
+    const int fieldX = x + 170, fieldW = width - 170 - 32, fieldH = 48, rowStep = 58;
+    const int rowsTop = y + 84;
+    const char* labels[5] = {"Search", "Region", "Sort by", "Order", "Genre"};
+    const std::string values[5] = {filterSearchText, regionOptions[filterRegionIndex], sortOptions[filterSortIndex],
+                                   orderOptions[filterOrderIndex], genreOptions[filterGenreIndex]};
+    for (int i = 0; i < 5; ++i) {
+        SDL_Rect field{fieldX, rowsTop + i * rowStep, fieldW, fieldH};
+        bool focused = (i == filterDropdownFocus && !filterDropdownPulldown);
+        DrawText(renderer, labelFont, labels[i], x + 32, field.y + (fieldH - TextHeight(labelFont)) / 2, focused ? t.textPrimary : t.textSecondary);
+        FillRoundedRect(renderer, field, 12, focused ? Lighten(t.backgroundDark, 0.06f) : WithAlpha(t.backgroundDark, 170));
+        if (focused) DrawFocusRing(renderer, field, 12, t.accentPrimary, 2, 2);
+        int textY = field.y + (fieldH - TextHeight(valueFont)) / 2;
+        if (i == 0) {
+            bool empty = values[0].empty();
+            std::string shown = empty ? "Type to search…" : values[0];
+            int w = DrawText(renderer, valueFont, Ellipsize(valueFont, shown, fieldW - 40), field.x + 16, textY, empty ? WithAlpha(t.textSecondary, 150) : t.textPrimary);
+            if (focused && (SDL_GetTicks() / 500) % 2 == 0)
+                FillRoundedRect(renderer, SDL_Rect{field.x + 16 + (empty ? 0 : w) + 2, field.y + 12, 2, fieldH - 24}, 0, t.accentPrimary);
+        } else {
+            DrawText(renderer, valueFont, Ellipsize(valueFont, values[i], fieldW - 56), field.x + 16, textY, t.textPrimary);
+            drawChevron(renderer, field.x + field.w - 24, field.y + fieldH / 2 - 2, t.textSecondary);
         }
     }
-    // --- Centered search textbox background (vertically and horizontally) ---
-    int searchBoxW = 400, searchBoxH = 36;
-    int labelW = 0, labelH = 0;
-    TTF_SizeText(font, "Search:", &labelW, &labelH);
-    int rowHeight = std::max(searchBoxH, labelH);
-    int rowY = yPos - 8 + (44 - rowHeight) / 2; // 44 is the focusRect height
-    int searchBoxX = modalX + (modalW - searchBoxW) / 2;
-    int searchBoxY = rowY + (rowHeight - searchBoxH) / 2;
-    int labelX = modalX + 60; // Align with other labels
-    int labelY = rowY + (rowHeight - labelH) / 2;
-    UiUtils::RenderText(renderer, font, "Search:", labelX, labelY, UiUtils::Color(220,220,220));
-    SDL_Rect searchBox = {searchBoxX, searchBoxY, searchBoxW, searchBoxH};
-    SDL_SetRenderDrawColor(renderer, 60, 60, 80, 220);
-    SDL_RenderFillRect(renderer, &searchBox);
-    // --- Draw the search text using natural width for each character ---
-    int textX = searchBox.x + 8;
-    int textY = searchBox.y + (searchBox.h - 24) / 2; // 24 is an estimated char height
-    auto codepoints = splitUtf8ToCodepoints(filterSearchText);
-    int cursorX = textX;
-    const int charSpacing = 4; // Extra space between each character
-    for (int i = 0; i < (int)codepoints.size(); ++i) {
-        int w = 0, h = 0;
-        TTF_SizeText(font, codepoints[i].c_str(), &w, &h);
-        UiUtils::RenderText(renderer, font, codepoints[i], cursorX, textY, UiUtils::Color(255,255,255));
-        cursorX += w + charSpacing;
-    }
-    // --- Draw blinking cursor/line at the next slot ---
-    if (filterDropdownFocus == 0 && !filterDropdownPulldown) {
-        int cursorY1 = textY;
-        int cursorY2 = textY + 24; // Match estimated char height
-        if ((SDL_GetTicks() / 500) % 2 == 0) {
-            SDL_SetRenderDrawColor(renderer, 255, 255, 80, 255);
-            SDL_RenderDrawLine(renderer, cursorX, cursorY1, cursorX, cursorY2);
-            SDL_RenderDrawLine(renderer, cursorX+1, cursorY1, cursorX+1, cursorY2); // 2px wide
-        }
-    }
-    yPos += 60;
-    // Region dropdown
-    UiUtils::RenderText(renderer, font, "Region:", modalX + 60, yPos, UiUtils::Color(220,220,220));
-    UiUtils::RenderText(renderer, font, regionOptions[filterRegionIndex], modalX + 200, yPos, UiUtils::Color(255,255,180));
-    yPos += 60;
-    // Sort by dropdown
-    UiUtils::RenderText(renderer, font, "Sort by:", modalX + 60, yPos, UiUtils::Color(220,220,220));
-    UiUtils::RenderText(renderer, font, sortOptions[filterSortIndex], modalX + 200, yPos, UiUtils::Color(255,255,180));
-    yPos += 60;
-    // Order dropdown
-    UiUtils::RenderText(renderer, font, "Order:", modalX + 60, yPos, UiUtils::Color(220,220,220));
-    UiUtils::RenderText(renderer, font, orderOptions[filterOrderIndex], modalX + 200, yPos, UiUtils::Color(255,255,180));
-    yPos += 60;
-    // Genre dropdown
-    UiUtils::RenderText(renderer, font, "Genre:", modalX + 60, yPos, UiUtils::Color(220,220,220));
-    UiUtils::RenderText(renderer, font, genreOptions[filterGenreIndex], modalX + 200, yPos, UiUtils::Color(255,255,180));
-    yPos += 80;
-    // Filter button focus
-    if (filterDropdownFocus == 5 && !filterDropdownPulldown) {
-        SDL_Rect btnFocus = {modalX + 200 - 8, yPos - 8, 200 + 16, 48 + 16};
-        SDL_SetRenderDrawColor(renderer, 60, 120, 220, 180);
-        SDL_RenderDrawRect(renderer, &btnFocus);
-    }
-    // Filter button
-    SDL_Rect filterBtn = {modalX + 200, yPos, 200, 48};
-    SDL_SetRenderDrawColor(renderer, 60, 120, 220, 160);
-    SDL_RenderFillRect(renderer, &filterBtn);
-    UiUtils::RenderTextCenteredInBox(renderer, font, "Filter", filterBtn, UiUtils::Color(255,255,255));
-    // Pulldown for dropdowns
+
+    // Apply button
+    SDL_Rect btn{x + width - 32 - 200, rowsTop + 5 * rowStep + 10, 200, 50};
+    bool btnFocused = (filterDropdownFocus == 5 && !filterDropdownPulldown);
+    FillRoundedRect(renderer, btn, 14, btnFocused ? t.accentPrimary : WithAlpha(t.accentPrimary, 50));
+    if (btnFocused) DrawFocusRing(renderer, btn, 14, t.accentPrimary, 3, 3);
+    RenderTextCenteredInBox(renderer, GetFont(18, true), "Apply filters", btn, Color(btnFocused ? t.backgroundDark : t.textPrimary));
+
+    // Dropdown list
     if (filterDropdownPulldown) {
-        int maxVisible = 6;
-        int total = filterDropdownOptions.size();
-        int first = std::min(std::max(0, filterDropdownPulldownIndex - maxVisible/2), std::max(0, total - maxVisible));
+        const int maxVisible = 6, itemH = 42;
+        int total = (int)filterDropdownOptions.size();
+        int first = std::min(std::max(0, filterDropdownPulldownIndex - maxVisible / 2), std::max(0, total - maxVisible));
         int visibleCount = std::min(maxVisible, total);
-        int pulldownY = modalY + 100 + filterDropdownFocus*60 + 44;
-        int pulldownX = modalX + 200;
-        int pulldownW = 400;
-        int pulldownH = 44 * visibleCount;
-        SDL_Color dropdownBg = {60, 170, 220, 245}; // Lighter blue
-        SDL_Color dropdownBorder = {120, 220, 255, 255}; // Bright border
-        SDL_Rect pdRect = {pulldownX, pulldownY, pulldownW, pulldownH};
-        SDL_SetRenderDrawColor(renderer, dropdownBg.r, dropdownBg.g, dropdownBg.b, dropdownBg.a);
-        SDL_RenderFillRect(renderer, &pdRect);
-        SDL_SetRenderDrawColor(renderer, dropdownBorder.r, dropdownBorder.g, dropdownBorder.b, dropdownBorder.a);
-        SDL_RenderDrawRect(renderer, &pdRect);
+        SDL_Rect list{fieldX, rowsTop + filterDropdownFocus * rowStep + fieldH + 6, fieldW, visibleCount * itemH + 12};
+        if (list.y + list.h > y + height - 12) list.y = rowsTop + filterDropdownFocus * rowStep - list.h - 6;
+        DrawShadow(renderer, list, 14, 24, 150, 8);
+        FillRoundedRect(renderer, list, 14, Lighten(t.cardBackground, 0.06f));
+        StrokeRoundedRect(renderer, list, 14, 1, WithAlpha(t.textPrimary, 26));
         for (int i = 0; i < visibleCount; ++i) {
             int optIdx = first + i;
-            UiUtils::Color c = (optIdx == filterDropdownPulldownIndex) ? UiUtils::Color(255,255,80) : UiUtils::Color(220,220,220);
-            UiUtils::RenderText(renderer, font, filterDropdownOptions[optIdx], pulldownX + 12, pulldownY + i*44 + 8, c);
+            SDL_Rect row{list.x + 6, list.y + 6 + i * itemH, list.w - 12, itemH};
+            bool sel = (optIdx == filterDropdownPulldownIndex);
+            if (sel) FillRoundedRect(renderer, row, 10, WithAlpha(t.accentPrimary, 60));
+            DrawText(renderer, valueFont, Ellipsize(valueFont, filterDropdownOptions[optIdx], row.w - 24), row.x + 14,
+                     row.y + (itemH - TextHeight(valueFont)) / 2, sel ? t.textPrimary : t.textSecondary);
         }
     }
-    // --- On-screen keyboard rendering ---
+
     if (showOnscreenKeyboard && filterDropdownFocus == 0 && !filterDropdownPulldown) {
-        onscreenKeyboard.render(renderer, font, modalX, modalY + 160, modalW, modalH - 160);
+        onscreenKeyboard.render(renderer, GetFont(20), x + 44, y + 150, width - 88, height - 160);
+        DrawHints(renderer, {{"DPAD", "Move"}, {"A", "Type"}, {"X", "Delete"}, {"B", "Done"}});
+    } else if (filterDropdownPulldown) {
+        DrawHints(renderer, {{"DPAD", "Choose"}, {"A", "Select"}, {"B", "Cancel"}});
+    } else {
+        DrawHints(renderer, {{"DPAD", "Move"}, {"A", "Edit"}, {"B", "Close"}});
     }
 }
 

@@ -66,7 +66,7 @@ static const std::unordered_map<std::string, std::string> SCRAPED_TO_FOLDER = {
     {"Capcom Play System (CPS)", "CPS1"},
     {"Capcom Play System 2 (CPS2)", "CPS2"},
     
-    // Gamulator mappings
+    // Short console-name mappings (originally added for Gamulator; kept as generic fallbacks)
     {"PSP", "PSP"},
     {"NDS", "NDS"},
     {"GBA", "GBA"},

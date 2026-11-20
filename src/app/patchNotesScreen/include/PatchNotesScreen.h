@@ -22,6 +22,12 @@ private:
     std::vector<std::string> wrappedLines;
     int scrollOffset = 0;
     int maxVisibleLines = 18; // Maximum visible lines on screen (approximate for 720p)
+    // Laid-out rows (parallel to wrappedLines): kind = 'H' heading, 'b' bullet,
+    // 'c' bullet continuation, 'p' paragraph, '-' divider, 'e' blank.
+    std::vector<char> rowKinds;
+    std::vector<int> rowLevels;
+    int layoutWidth = -1;
+    void layout(int width);
     
     // Analog stick handling for continuous scrolling
     int lastAxisValue = 0;

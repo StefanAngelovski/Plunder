@@ -3,6 +3,28 @@
 RomspediaScraperDownload::RomspediaScraperDownload() {}
 void RomspediaScraperDownload::download(const std::string&) {}
 
+// Romspedia serves archive links with raw spaces and other unsafe characters
+// (e.g. ".../roms/1986 - Pokemon Emerald (U)(TrashMan).zip"), which curl rejects
+// as a malformed URL. Percent-encode anything outside the URL-safe set while
+// leaving reserved characters and existing %XX escapes untouched.
+static std::string encodeUnsafeUrlChars(const std::string& url) {
+    static const char* hex = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(url.size());
+    for (unsigned char c : url) {
+        bool safe = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                    std::string("-._~:/?#@!$&'()*+,;=%").find((char)c) != std::string::npos;
+        if (safe) {
+            out += (char)c;
+        } else {
+            out += '%';
+            out += hex[c >> 4];
+            out += hex[c & 0x0F];
+        }
+    }
+    return out;
+}
+
 // Extracts the direct .zip download link from a Romspedia /download/ page
 std::string ExtractRomspediaDirectDownloadLink(const std::string& detailsPageUrl) {
     // Build the download page URL (append /download if not already there)
@@ -26,6 +48,7 @@ std::string ExtractRomspediaDirectDownloadLink(const std::string& detailsPageUrl
     std::smatch match;
     if (std::regex_search(html, match, archiveRe) && match.size() > 1) {
         std::string link = match[1].str();
+        link = encodeUnsafeUrlChars(link);
         printf("[RomspediaDownload] Direct archive anchor match: %s\n", link.c_str());
         return link;
     }
@@ -33,6 +56,7 @@ std::string ExtractRomspediaDirectDownloadLink(const std::string& detailsPageUrl
     std::regex urlArchiveRe(R"(https?://[^\"']+\.(zip|7z|rar))", std::regex::icase);
     if (std::regex_search(html, match, urlArchiveRe) && match.size() > 0) {
         std::string link = match[0].str();
+        link = encodeUnsafeUrlChars(link);
         printf("[RomspediaDownload] Fallback absolute archive match: %s\n", link.c_str());
         return link;
     }
@@ -40,7 +64,7 @@ std::string ExtractRomspediaDirectDownloadLink(const std::string& detailsPageUrl
     return "";
 }
 
-// Downloads the .zip and extracts if needed, matching Hexrom/Gamulator logic
+// Downloads the .zip and extracts if needed, matching Hexrom logic
 bool downloadAndExtractRomspediaZip(const std::string& downloadUrl, const std::string& consoleName, const std::string& romName) {
     std::string folder = getFolderForScrapedConsole(consoleName);
     if (folder.empty()) {

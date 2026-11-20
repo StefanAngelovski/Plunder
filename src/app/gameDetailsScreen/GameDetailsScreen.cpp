@@ -64,316 +64,228 @@ static void RestoreMusicVolume() {
     Mix_VolumeMusic(MIX_MAX_VOLUME);
 }
 
-// Helper: Draw popup overlay with scrolling and scrollbar
+// Helper: modal for choosing a download version, or for a result/error message.
 static void RenderDownloadPopup(SDL_Renderer* renderer, TTF_Font* font, const std::vector<DownloadOption>& options, int selected, int scrollOffset, const std::string& message) {
-    int w = 1100;
-    int x = 1280/2 - w/2;
-    int y = 0, h = 0;
+    (void)font;
+    using namespace UiUtils;
+    const ThemeColors& t = Theme::getInstance().colors();
+    DrawScrim(renderer);
+    const int w = 760;
+    const int x = (SCREEN_W - w) / 2;
     if (!options.empty()) {
-        // Standard modal for options
-        h = 600;
-        y = 720/2 - h/2;
-    } else {
-        // Dynamic height for confirmation/error
-        int msgMaxWidth = w - 120;
-        int textW = 0, textH = 0;
-        TTF_SizeText(font, message.c_str(), &textW, &textH);
-        // Estimate wrapped height: TTF_RenderText_Blended_Wrapped wraps at msgMaxWidth
-        int lines = 1;
-        if (textW > msgMaxWidth && msgMaxWidth > 0) lines = (textW + msgMaxWidth - 1) / msgMaxWidth;
-        int lineH = textH > 0 ? textH : 36;
-        h = 60 + lines * lineH + 60; // top/bottom padding + text
-        if (h < 180) h = 180; // minimum height
-        y = 720/2 - h/2;
-    }
-    SDL_SetRenderDrawColor(renderer, 20, 20, 40, 250); // Increased alpha from 230 to 250
-    SDL_Rect bg = {x, y, w, h};
-    SDL_RenderFillRect(renderer, &bg);
-    if (!options.empty()) {
-    UiUtils::RenderTextCentered(renderer, font, "Select Download Version", x + w/2, y + 40, UiUtils::Color(255,255,255));
-        int listX = x + 60;
-        int listY = y + 90;
-        int listW = w - 180;
-        int itemH = 44;
-        int maxVisible = (h - 180) / itemH;
-        int total = options.size();
-        int start = scrollOffset;
-        int end = std::min(start + maxVisible, total);
-        for (int i = start; i < end; ++i) {
-            UiUtils::Color c = (i == selected) ? UiUtils::Color(0,255,255) : UiUtils::Color(220,220,220);
-            UiUtils::RenderText(renderer, font, options[i].label, listX, listY + (i - start)*itemH, c);
+        const int itemH = 50, maxVisible = 7;
+        int visible = std::min(maxVisible, (int)options.size());
+        int h = 96 + visible * itemH + 28;
+        int y = (SCREEN_H - h) / 2 - 10;
+        DrawPanel(renderer, SDL_Rect{x, y, w, h}, 24);
+        DrawText(renderer, GetFont(24, true), "Choose a version", x + 32, y + 28, t.textPrimary);
+        DrawText(renderer, GetFont(16), std::to_string(options.size()) + " available", x + 32, y + 62, t.textSecondary);
+        int listY = y + 96;
+        int end = std::min(scrollOffset + visible, (int)options.size());
+        for (int i = scrollOffset; i < end; ++i) {
+            SDL_Rect row{x + 20, listY + (i - scrollOffset) * itemH, w - 40 - 16, itemH - 6};
+            bool sel = (i == selected);
+            if (sel) {
+                FillRoundedRect(renderer, row, 12, WithAlpha(t.accentPrimary, 46));
+                FillRoundedRect(renderer, SDL_Rect{row.x + 8, row.y + 12, 4, row.h - 24}, 2, t.accentPrimary);
+            }
+            TTF_Font* f = GetFont(18, sel);
+            DrawText(renderer, f, Ellipsize(f, options[i].label, row.w - 40), row.x + 24, row.y + (row.h - TextHeight(f)) / 2, sel ? t.textPrimary : t.textSecondary);
         }
-        // Draw scrollbar if needed
-        if (total > maxVisible) {
-            int barX = x + w - 60;
-            int barY = listY;
-            int barW = 12;
-            int barH = maxVisible * itemH;
-            float thumbH = (float)maxVisible / total * barH;
-            float thumbY = barY + ((float)scrollOffset / (total - maxVisible)) * (barH - thumbH);
-            SDL_SetRenderDrawColor(renderer, 80, 80, 100, 100);
-            SDL_Rect bgRect = {barX, barY, barW, barH};
-            SDL_RenderFillRect(renderer, &bgRect);
-            SDL_SetRenderDrawColor(renderer, 220, 220, 80, 160);
-            SDL_Rect thumbRect = {barX, (int)thumbY, barW, (int)thumbH};
-            SDL_RenderFillRect(renderer, &thumbRect);
+        if ((int)options.size() > visible) {
+            float pos = (float)scrollOffset / std::max(1, (int)options.size() - visible);
+            DrawScrollbar(renderer, x + w - 26, listY, visible * itemH - 6, (float)visible / options.size(), pos);
         }
+        DrawHints(renderer, {{"DPAD", "Choose"}, {"A", "Download"}, {"B", "Cancel"}});
+        return;
     }
-    // For confirmation/error, center and wrap the message
-    if (!message.empty()) {
-        int msgMaxWidth = w - 120;
-        int msgY = y + h/2 - 40;
-    UiUtils::RenderTextWrapped(renderer, font, message, x + 60, msgY, msgMaxWidth, UiUtils::Color(255,180,180));
-    }
+    // Message dialog
+    std::string lower = message;
+    for (auto& ch : lower) ch = (char)std::tolower((unsigned char)ch);
+    bool isError = lower.find("fail") != std::string::npos || lower.find("error") != std::string::npos ||
+                   lower.find("no download") != std::string::npos || lower.find("cancel") != std::string::npos;
+    TTF_Font* bodyFont = GetFont(18);
+    std::vector<std::string> lines = WrapText(bodyFont, message, w - 64);
+    if (lines.size() > 6) lines.resize(6);
+    int h = 150 + (int)lines.size() * 26;
+    int y = (SCREEN_H - h) / 2 - 10;
+    DrawPanel(renderer, SDL_Rect{x, y, w, h}, 24);
+    SDL_Color tone = isError ? SDL_Color{239, 93, 93, 255} : t.accentPrimary;
+    FillCircle(renderer, x + 50, y + 50, 18, WithAlpha(tone, 50));
+    FillCircle(renderer, x + 50, y + 50, 7, tone);
+    DrawText(renderer, GetFont(24, true), isError ? "Something went wrong" : "Download", x + 82, y + 34, t.textPrimary);
+    int ty = y + 92;
+    for (const auto& l : lines) { DrawText(renderer, bodyFont, l, x + 32, ty, t.textSecondary); ty += 26; }
+    DrawHints(renderer, {{"A", "OK"}});
 }
 
 void GameDetailsScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
-    Theme::getInstance().applyBackground(renderer);
-    SDL_RenderClear(renderer);
-    
-    int x = 60, y = 40;
-    // Precompute if About text has any non-whitespace so we can adjust layout & image size
-    bool aboutHasText = std::any_of(details.about.begin(), details.about.end(), [](unsigned char c){ return !std::isspace(c); });
-    // Icon (retain aspect ratio)
-    int iconW = 180, iconH = 180; // default fallback
-    if (!aboutHasText) {
-        iconW *= 2; // double width when no About section
-    }
-    // Check if texture is valid and get dimensions
-    bool hasValidTexture = false;
+    (void)font;
+    using namespace UiUtils;
+    const ThemeColors& t = Theme::getInstance().colors();
+    DrawBackground(renderer);
+    const std::string consoleLabel = StripTrailingCount(details.consoleName);
+    DrawHeader(renderer, details.title.empty() ? "Game" : details.title, consoleLabel);
+
+    const int top = HEADER_H + 12;
+    const int bottom = SCREEN_H - FOOTER_H - 8;
+
+    // ---- Left column: cover + action ----------------------------------------------
+    const int colX = MARGIN_X, colW = 340, inset = 14;
+    int coverW = colW - 2 * inset, coverH = 0;
+    bool hasCover = false;
     if (iconTexture) {
-        int texW = 0, texH = 0;
-        SDL_QueryTexture(iconTexture, NULL, NULL, &texW, &texH);
-        if (texW > 0 && texH > 0) {
-            hasValidTexture = true;
-            iconH = texH * iconW / texW;
-        }
+        int tw = 0, th = 0;
+        SDL_QueryTexture(iconTexture, nullptr, nullptr, &tw, &th);
+        if (tw > 0 && th > 0) { hasCover = true; coverH = std::min(300, th * coverW / tw); }
     }
-    // Only create icon rect and render if we have a valid texture
-    if (hasValidTexture) {
-        SDL_Rect iconRect = {x, y, iconW, iconH};
-        SDL_RenderCopy(renderer, iconTexture, NULL, &iconRect);
-    }
-    
-    // Adjust layout based on whether we have a valid image
-    int fieldsXRight = hasValidTexture ? x + 200 : x; // right-of-image column (or just x if no image)
-    int currentYRight = y;      // y tracker for right column
-    int belowImageStartY = hasValidTexture ? y + iconH + 20 : y; // start y for below-image layout (or just y if no image)
+    if (!hasCover) coverH = 180;
+    const bool downloading = downloadManager.isDownloading();
+    const int actionH = downloading ? 132 : 56;
+    SDL_Rect panel{colX, top, colW, inset + coverH + 16 + actionH + inset};
+    DrawShadow(renderer, panel, 22, 26, 120, 10);
+    FillRoundedRect(renderer, panel, 22, t.cardBackground);
+    StrokeRoundedRect(renderer, panel, 22, 1, WithAlpha(t.textPrimary, 18));
 
-    if (aboutHasText) {
-        // Title to right of image
-        UiUtils::RenderText(renderer, font, details.title, fieldsXRight, currentYRight, UiUtils::Color(255,255,80), 1.5f);
-        currentYRight += 40;
-        // Fields in right column
-        auto renderField = [&](const std::string &label, const std::string &value, const UiUtils::Color &color){
-            UiUtils::RenderText(renderer, font, label + value, fieldsXRight, currentYRight, color);
-            currentYRight += 30;
-        };
-    if (!details.publisher.empty()) renderField("Publisher: ", details.publisher, UiUtils::Color(200,200,200));
-    if (!details.genre.empty())     renderField("Genre: ", details.genre, UiUtils::Color(200,200,200));
-    if (!details.language.empty())  renderField("Language: ", details.language, UiUtils::Color(180,200,220));
-    if (!details.downloads.empty()) renderField("Downloads: ", details.downloads, UiUtils::Color(180,220,180));
-    if (!details.releaseDate.empty()) renderField("Release: ", details.releaseDate, UiUtils::Color(220,180,180));
-    if (!details.fileSize.empty())  renderField("File Size: ", details.fileSize, UiUtils::Color(220,220,180));
+    SDL_Rect cover{colX + inset, top + inset, coverW, coverH};
+    if (hasCover) {
+        int tw = 0, th = 0;
+        SDL_QueryTexture(iconTexture, nullptr, nullptr, &tw, &th);
+        SDL_Rect src{0, 0, tw, th};
+        float boxAspect = (float)cover.w / cover.h, texAspect = (float)tw / th;
+        if (texAspect > boxAspect) { int cw = (int)(th * boxAspect); src.x = (tw - cw) / 2; src.w = cw; }
+        else { int ch = (int)(tw / boxAspect); src.y = (th - ch) / 2; src.h = ch; }
+        SDL_SetTextureAlphaMod(iconTexture, 255);
+        SDL_RenderCopy(renderer, iconTexture, &src, &cover);
     } else {
-        // Title below image (full-width start)
-        UiUtils::RenderText(renderer, font, details.title, x, belowImageStartY, UiUtils::Color(255,255,80), 1.5f);
-        int curY = belowImageStartY + 40;
-        auto renderFieldBelow = [&](const std::string &label, const std::string &value, const UiUtils::Color &color){
-            UiUtils::RenderText(renderer, font, label + value, x, curY, color);
-            curY += 30;
-        };
-    if (!details.publisher.empty()) renderFieldBelow("Publisher: ", details.publisher, UiUtils::Color(200,200,200));
-    if (!details.genre.empty())     renderFieldBelow("Genre: ", details.genre, UiUtils::Color(200,200,200));
-    if (!details.language.empty())  renderFieldBelow("Language: ", details.language, UiUtils::Color(180,200,220));
-    if (!details.downloads.empty()) renderFieldBelow("Downloads: ", details.downloads, UiUtils::Color(180,220,180));
-    if (!details.releaseDate.empty()) renderFieldBelow("Release: ", details.releaseDate, UiUtils::Color(220,180,180));
-    if (!details.fileSize.empty())  renderFieldBelow("File Size: ", details.fileSize, UiUtils::Color(220,220,180));
-        // Update y so subsequent positioning uses the maximum of right-column logic (not used now) and below layout
-        y = curY; // This ensures button stays consistent if later logic references y
+        FillRoundedRect(renderer, cover, 14, Lighten(t.cardBackground, 0.05f));
+        RenderTextCentered(renderer, GetFont(16), "No cover art", cover.x + cover.w / 2, cover.y + cover.h / 2, Color(t.textSecondary));
+    }
+    MaskCorners(renderer, cover, 14, t.cardBackground);
+
+    const int actionY = cover.y + cover.h + 16;
+    const SDL_Rect actionArea{colX + inset, actionY, coverW, actionH};
+    if (!downloading) {
+        bool available = !details.downloadUrl.empty();
+        SDL_Rect btn = actionArea;
+        if (buttonFocused) {
+            DrawShadow(renderer, btn, 14, 18, 120, 6);
+            FillRoundedRect(renderer, btn, 14, available ? t.accentPrimary : Lighten(t.cardBackground, 0.12f));
+            DrawFocusRing(renderer, btn, 14, t.accentPrimary, 3, 3);
+        } else {
+            FillRoundedRect(renderer, btn, 14, available ? WithAlpha(t.accentPrimary, 40) : Lighten(t.cardBackground, 0.08f));
+            StrokeRoundedRect(renderer, btn, 14, 2, available ? WithAlpha(t.accentPrimary, 140) : WithAlpha(t.textSecondary, 60));
+        }
+        SDL_Color fg = !available ? t.textSecondary : (buttonFocused ? t.backgroundDark : t.textPrimary);
+        RenderTextCenteredInBox(renderer, GetFont(19, true), available ? "Download" : "Unavailable", btn, Color(fg));
+    } else {
+        std::string progressText = downloadManager.getProgressText();
+        bool unzipping = progressText.find("Unzipping") != std::string::npos;
+        float progress = -1.0f;
+        std::string pct;
+        if (downloadManager.getTotalBytes() > 0) {
+            progress = std::min(1.0f, float(downloadManager.getCurrentBytes()) / float(downloadManager.getTotalBytes()));
+            pct = std::to_string((int)(progress * 100)) + "%";
+        }
+        if (unzipping) progress = -1.0f;
+        TTF_Font* lf = GetFont(17, true);
+        DrawText(renderer, lf, unzipping ? "Unzipping…" : "Downloading…", actionArea.x, actionArea.y, t.textPrimary);
+        if (!pct.empty() && !unzipping) {
+            int pw = TextWidth(lf, pct);
+            DrawText(renderer, lf, pct, actionArea.x + actionArea.w - pw, actionArea.y, t.accentPrimary);
+        }
+        SDL_Rect bar{actionArea.x, actionArea.y + 30, actionArea.w, 10};
+        DrawProgressBar(renderer, bar, progress);
+        TTF_Font* sf = GetFont(14);
+        DrawText(renderer, sf, Ellipsize(sf, progressText, actionArea.w), actionArea.x, bar.y + 18, t.textSecondary);
+        SDL_Rect cancel{actionArea.x, actionArea.y + actionArea.h - 44, actionArea.w, 44};
+        bool cancelFocused = downloadManager.getButtonFocus() == 1;
+        SDL_Color red{239, 93, 93, 255};
+        FillRoundedRect(renderer, cancel, 12, cancelFocused ? red : WithAlpha(red, 36));
+        if (cancelFocused) DrawFocusRing(renderer, cancel, 12, red, 3, 3);
+        RenderTextCenteredInBox(renderer, GetFont(17, true), "Cancel", cancel, Color(cancelFocused ? SDL_Color{255, 255, 255, 255} : red));
     }
 
-    // About section positioning depends on layout
-    int fileSizeBottom = y + 30; // 30px below last field
-    int imageBottom = hasValidTexture ? y + iconH + 20 : y; // 20px below image if image exists, otherwise just y
-    
-    // Adjust aboutY based on whether we have an image and about text
-    int aboutY;
-    if (hasValidTexture && aboutHasText) {
-        // Layout A with image: About goes below both image and right-column fields
-        aboutY = std::max(fileSizeBottom, imageBottom);
-    } else if (hasValidTexture && !aboutHasText) {
-        // Layout B with image: fields are below image, so aboutY not used
-        aboutY = std::max(fileSizeBottom, imageBottom);
-    } else if (!hasValidTexture && aboutHasText) {
-        // Layout A without image: About goes below the fields (which are now on left starting from top)
-        aboutY = currentYRight + 20; // 20px below the last field rendered in right column (which is now left column)
-    } else {
-        // Layout B without image: aboutY not used
-        aboutY = y;
-    }
-    
-    int aboutAreaHeight = 650 - (aboutY + 30) - 20; // 20px margin above Download button
-    int aboutAreaWidth = 860; // Full width since About always uses full width
-    int aboutAreaX = x;
-    // Determine if About text has any non-whitespace characters
-    // aboutHasText already computed above
-    if (aboutHasText) {
-        // Render 'About:' label only if there is real content
-        UiUtils::RenderText(renderer, font, "About:", aboutAreaX, aboutY, UiUtils::Color(255,255,255));
-    } else {
-    }
-    // Word wrap about text to pixel width (only if content exists)
-    std::vector<std::string> aboutLines;
-    if (aboutHasText) {
-        std::istringstream aboutStream(details.about);
-        std::string paragraph;
-        while (std::getline(aboutStream, paragraph)) {
-            std::istringstream wordStream(paragraph);
-            std::string word, line;
-            while (wordStream >> word) {
-                std::string testLine = line.empty() ? word : line + " " + word;
-                int w = 0, h = 0;
-                TTF_SizeText(font, testLine.c_str(), &w, &h);
-                if (w > aboutAreaWidth && aboutAreaWidth > 0) {
-                    aboutLines.push_back(line);
-                    line = word;
-                } else {
-                    line = testLine;
-                }
-            }
-            if (!line.empty()) aboutLines.push_back(line);
+    // ---- Right column: facts + about ------------------------------------------------
+    const int rx = colX + colW + 36;
+    const int rw = SCREEN_W - MARGIN_X - rx;
+    int y = top;
+    std::vector<std::pair<std::string, std::string>> facts;
+    auto add = [&facts](const char* label, const std::string& v) { if (!v.empty()) facts.push_back({label, v}); };
+    add("CONSOLE", consoleLabel);
+    add("REGION", details.language);
+    add("SIZE", details.fileSize);
+    add("RELEASED", details.releaseDate);
+    add("DOWNLOADS", details.downloads);
+    add("GENRE", details.genre);
+    add("PUBLISHER", details.publisher);
+    if (!facts.empty()) {
+        const int cols = 3, cellH = 66, gap = 12;
+        const int cellW = (rw - (cols - 1) * gap) / cols;
+        TTF_Font* lf = GetFont(13, true);
+        TTF_Font* vf = GetFont(19, true);
+        for (size_t i = 0; i < facts.size(); ++i) {
+            SDL_Rect cell{rx + (int)(i % cols) * (cellW + gap), y + (int)(i / cols) * (cellH + gap), cellW, cellH};
+            FillRoundedRect(renderer, cell, 14, WithAlpha(t.cardBackground, 200));
+            DrawText(renderer, lf, facts[i].first, cell.x + 16, cell.y + 12, t.textSecondary);
+            DrawText(renderer, vf, Ellipsize(vf, facts[i].second, cell.w - 32), cell.x + 16, cell.y + 32, t.textPrimary);
         }
+        y += (int)((facts.size() + cols - 1) / cols) * (cellH + gap) + 10;
     }
-    // Render lines with scrolling
-    int lineHeight = 0;
-    TTF_SizeText(font, "Ag", nullptr, &lineHeight);
-    if (lineHeight < 1) lineHeight = 28;
-    int maxVisibleLines = aboutAreaHeight / lineHeight;
-    aboutMaxVisibleLines = maxVisibleLines;
-    int totalLines = aboutLines.size();
-    int scrollOffset = aboutScrollOffset;
-    if (scrollOffset > totalLines - maxVisibleLines) scrollOffset = std::max(0, totalLines - maxVisibleLines);
-    if (scrollOffset < 0) scrollOffset = 0;
-    aboutScrollOffset = scrollOffset;
-    if (aboutHasText) {
-        int visibleEnd = std::min(totalLines, scrollOffset + maxVisibleLines);
-        for (int i = scrollOffset; i < visibleEnd; ++i) {
-            UiUtils::RenderText(renderer, font, aboutLines[i], aboutAreaX, aboutY + 30 + (i - scrollOffset) * lineHeight, UiUtils::Color(220,220,220));
+
+    bool aboutHasText = std::any_of(details.about.begin(), details.about.end(), [](unsigned char c) { return !std::isspace(c); });
+    TTF_Font* bodyFont = GetFont(18);
+    const int lineH = 27;
+    SDL_Rect aboutBox{rx, y, rw, bottom - y};
+    if (aboutHasText && aboutBox.h > 80) {
+        DrawText(renderer, GetFont(20, true), "About", rx, y, t.textPrimary);
+        aboutBox.y += 36; aboutBox.h -= 36;
+        const int padX = 20, padY = 14;
+        int textW = aboutBox.w - 2 * padX - 14;
+        if (aboutWrapWidth != textW) {
+            aboutWrapped = WrapText(bodyFont, details.about, textW);
+            while (!aboutWrapped.empty() && aboutWrapped.back().empty()) aboutWrapped.erase(aboutWrapped.end() - 1);
+            while (!aboutWrapped.empty() && aboutWrapped.front().empty()) aboutWrapped.erase(aboutWrapped.begin());
+            aboutWrapWidth = textW;
         }
+        aboutBox.h = std::min(aboutBox.h, (int)aboutWrapped.size() * lineH + 2 * padY);  // shrink to fit short text
+        FillRoundedRect(renderer, aboutBox, 16, WithAlpha(t.cardBackground, 160));
+        int maxVisible = std::max(1, (aboutBox.h - 2 * padY) / lineH);
+        aboutMaxVisibleLines = maxVisible;
+        aboutTotalLines = (int)aboutWrapped.size();
+        int maxOffset = std::max(0, aboutTotalLines - maxVisible);
+        aboutScrollOffset = std::max(0, std::min(aboutScrollOffset, maxOffset));
+        int end = std::min(aboutTotalLines, aboutScrollOffset + maxVisible);
+        for (int i = aboutScrollOffset; i < end; ++i)
+            DrawText(renderer, bodyFont, aboutWrapped[i], aboutBox.x + padX, aboutBox.y + padY + (i - aboutScrollOffset) * lineH, Mix(t.textSecondary, t.textPrimary, 0.55f));
+        if (aboutTotalLines > maxVisible)
+            DrawScrollbar(renderer, aboutBox.x + aboutBox.w - 16, aboutBox.y + padY, maxVisible * lineH, (float)maxVisible / aboutTotalLines, (float)aboutScrollOffset / maxOffset);
+    } else {
+        aboutMaxVisibleLines = 0;
+        aboutTotalLines = 0;
     }
-    // Draw scrollbar
-    if (aboutHasText && totalLines > maxVisibleLines) {
-        int barX = 1280 - 60; // Move scrollbar all the way to the right edge
-        int barY = aboutY + 30;
-        int barW = 10;
-        int barH = maxVisibleLines * lineHeight; // Only the visible area height
-        float thumbH = (float)maxVisibleLines / totalLines * barH;
-        float thumbY = barY + ((float)scrollOffset / (totalLines - maxVisibleLines)) * (barH - thumbH);
-        SDL_SetRenderDrawColor(renderer, 80, 80, 100, 100);
-        SDL_Rect bgRect = {barX, barY, barW, barH};
-        SDL_RenderFillRect(renderer, &bgRect);
-        SDL_SetRenderDrawColor(renderer, 220, 220, 80, 160);
-        SDL_Rect thumbRect = {barX, (int)thumbY, barW, (int)thumbH};
-        SDL_RenderFillRect(renderer, &thumbRect);
-    }
-    // Download button
-    SDL_Rect btnRect = {x, 650, 260, 50};
-    SDL_SetRenderDrawColor(renderer, 60, 120, 220, 160);
-    SDL_RenderFillRect(renderer, &btnRect);
-    // Animate border progress (smoother)
-    Uint32 now = SDL_GetTicks();
-    float target = buttonFocused ? 1.0f : 0.0f;
-    float animSpeed = 0.004f * (now - lastAnimTime); // slower for smoother
-    if (buttonBorderAnim < target) buttonBorderAnim = std::min(target, buttonBorderAnim + animSpeed);
-    if (buttonBorderAnim > target) buttonBorderAnim = std::max(target, buttonBorderAnim - animSpeed);
-    lastAnimTime = now;
-    SDL_Color cyan = {0, 255, 255, 255};
-    DrawAnimatedLBorder(renderer, btnRect, buttonBorderAnim, cyan);
-    const char* btnLabel = details.downloadUrl.empty() ? "Unavailable" : "Download now";
-    UiUtils::RenderTextCenteredInBox(renderer, font, btnLabel, btnRect, UiUtils::Color(255,255,255));
+
+    // ---- Footer (the popup draws its own hints) ---------------------------------------
     if (showDownloadPopup) {
-        // Only suppress the modal for HexRom when showing options, not for confirmation
-        bool isHexrom = !details.downloadUrl.empty() && details.downloadUrl.find("hexrom.com") != std::string::npos;
-        int maxVisible = (600 - 180) / 44;
-        int total = downloadOptions.size();
+        // skip
+    } else if (downloading) {
+        DrawHints(renderer, {{"DPAD", "Focus"}, {"A", "Confirm"}, {"B", "Back"}});
+    } else if (buttonFocused) {
+        DrawHints(renderer, {{"DPAD", "Read about"}, {"A", "Download"}, {"B", "Back"}});
+    } else {
+        DrawHints(renderer, {{"DPAD", "Scroll, down to Download"}, {"B", "Back"}});
+    }
+
+    if (showDownloadPopup) {
+        int maxVisible = 7;
+        int total = (int)downloadOptions.size();
         int scrollOffset = downloadPopupScrollOffset;
         if (scrollOffset > total - maxVisible) scrollOffset = std::max(0, total - maxVisible);
         if (scrollOffset < 0) scrollOffset = 0;
         RenderDownloadPopup(renderer, font, downloadOptions, selectedDownloadOption, scrollOffset, downloadPopupMessage);
     }
-    // Draw Downloading... progress bar if in progress
-    if (downloadManager.isDownloading()) {
-        int barW = 600, barH = 32;
-        int barX = 340, barY = 650;
-        SDL_Rect barBg = {barX, barY, barW, barH};
-        SDL_SetRenderDrawColor(renderer, 60, 60, 80, 220);
-        SDL_RenderFillRect(renderer, &barBg);
-        float progress = 0.0f;
-        static float indet = 0.0f;
-        if (downloadManager.getTotalBytes() > 0) {
-            progress = std::min(1.0f, float(downloadManager.getCurrentBytes()) / float(downloadManager.getTotalBytes()));
-        } else {
-            // Indeterminate: animate bar
-            indet += 0.02f; if (indet > 1.0f) indet = 0.0f;
-            progress = 0.2f + 0.6f * std::abs(std::sin(indet * 3.14159f));
-        }
-        SDL_SetRenderDrawColor(renderer, 80, 200, 255, 255);
-        SDL_Rect barFill = {barX, barY, int(barW * progress), barH};
-        SDL_RenderFillRect(renderer, &barFill);
-
-        // --- Unzipping message logic ---
-        // Show "Game is being unzipped" above the loading bar if unzipping is in progress
-        static bool wasUnzipping = false;
-        static Uint32 unzipMsgTimer = 0;
-        bool showUnzipMsg = false;
-        // Heuristic: if downloadProgressText contains "Unzipping...", show the message
-        std::string progressText = downloadManager.getProgressText();
-        if (progressText.find("Unzipping...") != std::string::npos) {
-            showUnzipMsg = true;
-            wasUnzipping = true;
-            unzipMsgTimer = SDL_GetTicks();
-        } else if (wasUnzipping && SDL_GetTicks() - unzipMsgTimer < 2000) {
-            // Keep message for 2 seconds after unzipping
-            showUnzipMsg = true;
-        } else {
-            wasUnzipping = false;
-        }
-        if (showUnzipMsg) {
-            UiUtils::RenderText(renderer, font, "Game is being unzipped", barX, barY - 72, UiUtils::Color(255,255,180));
-        }
-
-        UiUtils::RenderText(renderer, font, "Downloading...", barX, barY - 36, UiUtils::Color(255,255,255));
-        UiUtils::RenderText(renderer, font, progressText, barX, barY + barH + 8, UiUtils::Color(200,255,200));
-        // Render Cancel button
-        int cancelW = 160, cancelH = 44;
-        int cancelX = barX + barW + 24;
-        int cancelY = barY;
-        SDL_Rect cancelRect = {cancelX, cancelY, cancelW, cancelH};
-        SDL_SetRenderDrawColor(renderer, 200, 60, 60, 220);
-        SDL_RenderFillRect(renderer, &cancelRect);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDrawRect(renderer, &cancelRect);
-        UiUtils::RenderTextCenteredInBox(renderer, font, "Cancel", cancelRect, UiUtils::Color(255,255,255));
-        // Draw focus/hover effect
-        SDL_Color focusColor = {255, 255, 0, 255};
-        float borderAnim = 1.0f;
-        int downloadButtonFocus = downloadManager.getButtonFocus();
-        if (downloadButtonFocus == 0) {
-            SDL_Rect focusRect = {barX-4, barY-4, barW+8, barH+8};
-            DrawAnimatedLBorder(renderer, focusRect, borderAnim, focusColor);
-        } else if (downloadButtonFocus == 1) {
-            SDL_Rect focusRect = {cancelX-4, cancelY-4, cancelW+8, cancelH+8};
-            DrawAnimatedLBorder(renderer, focusRect, borderAnim, focusColor);
-        }
-    }
 }
 
-
-
-
-
-// ================================ INPUT =======================================
 void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) {
     // --- Download/cancel button navigation always takes priority when downloading ---
     if (downloadManager.isDownloading()) {
@@ -407,8 +319,7 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
     }
     // --- MODAL HANDLING: Always first! ---
     if (showDownloadPopup) {
-        int itemH = 44;
-        int maxVisible = (600 - 180) / itemH;
+        int maxVisible = 7;  // must match RenderDownloadPopup
         int total = downloadOptions.size();
         // D-pad navigation
         if (e.type == SDL_KEYDOWN || e.type == SDL_CONTROLLERBUTTONDOWN) {
@@ -506,7 +417,8 @@ void GameDetailsScreen::handleInput(const SDL_Event& e, MenuSystem& menuSystem) 
             if (!line.empty()) aboutLines.push_back(line);
         }
     }
-    int totalLines = aboutLines.size();
+    int totalLines = aboutTotalLines;  // measured in render() with the real font
+    (void)aboutLines;
     if (e.type == SDL_CONTROLLERBUTTONDOWN) {
         // Back/close (now B is back)
         if (e.cbutton.button == BUTTON_B) { // B = back

@@ -8,6 +8,7 @@
 
 ThemesScreen::ThemesScreen(std::function<void()> onBack)
     : CarouselMenuScreen("Themes"), onBackCallback(onBack) {
+    setSubtitle("Settings");
     currentThemeId = getCurrentTheme();
     initializeThemes();
     updateMenuItems();
@@ -20,7 +21,7 @@ void ThemesScreen::initializeThemes() {
     // Default theme
     availableThemes.push_back({
         "default",
-        "Default",
+        "Plunder",
         "images/settingsmenu/themes.png"
     });
     
@@ -61,9 +62,6 @@ void ThemesScreen::updateMenuItems() {
     // Add theme items
     for (const auto& theme : availableThemes) {
         std::string label = theme.name;
-        if (theme.id == currentThemeId) {
-            label += " (Active)";
-        }
         
         addItem(label, theme.imagePath, [this, themeId = theme.id]() {
             pendingSelectedIndex = getSelectedIndex(); // Save position for deferred refresh
@@ -102,25 +100,16 @@ void ThemesScreen::render(SDL_Renderer* renderer, TTF_Font* font) {
 }
 
 // Custom rendering for theme items
-void ThemesScreen::renderItem(SDL_Renderer* renderer, TTF_Font* font, int i, int x, int y, int w, int h, bool focused) {
-    const auto& items = getItems();
-    
-    // Check if this is the currently active theme (but not Back button)
-    bool isActiveTheme = false;
-    if (i < (int)availableThemes.size()) {
-        isActiveTheme = (availableThemes[i].id == currentThemeId);
+CarouselItemDecor ThemesScreen::decorate(int i) {
+    CarouselItemDecor d;
+    if (i < 0 || i >= (int)availableThemes.size()) return d;  // Back button
+    ThemeColors c = Theme::preset(availableThemes[i].id);
+    d.swatches = {c.background, c.cardBackground, c.accentPrimary, c.textPrimary};
+    if (availableThemes[i].id == currentThemeId) {
+        d.badge = "Active";
+        d.badgeOn = true;
     }
-    
-    // Draw highlighted background for active theme
-    if (isActiveTheme) {
-        SDL_Color activeCol = Theme::getInstance().activeItem();
-        SDL_SetRenderDrawColor(renderer, activeCol.r, activeCol.g, activeCol.b, focused ? 255 : 200);
-        SDL_Rect bgRect = {x + 2, y + 2, w - 4, h - 4};
-        SDL_RenderFillRect(renderer, &bgRect);
-    }
-    
-    // Draw base item
-    CarouselMenuScreen::renderItem(renderer, font, i, x, y, w, h, focused);
+    return d;
 }
 
 // Read the current theme from config file

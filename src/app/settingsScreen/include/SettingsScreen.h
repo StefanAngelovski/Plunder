@@ -32,8 +32,8 @@ public:
     void downloadAndInstallUpdate();
 
 protected:
-    // Custom rendering for each carousel item
-    void renderItem(SDL_Renderer* renderer, TTF_Font* font, int i, int x, int y, int w, int h, bool focused) override;
+    // Badges / sub-labels for each carousel card
+    CarouselItemDecor decorate(int i) override;
 
 private:
     // State

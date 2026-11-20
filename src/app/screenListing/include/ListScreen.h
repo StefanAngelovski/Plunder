@@ -22,9 +22,6 @@
 #include "../../../model/ListItem.h"
 #include "../../../model/PaginationInfo.h"
 #include "../../../utils/include/HttpUtils.h"   
-#include "../../../scraper/Gamulator/include/GamulatorScraper.h"
-#include "../../../scraper/Gamulator/include/GamulatorFilterModal.h"
-#include "../../../scraper/Gamulator/include/GamulatorScraperFilter.h"
 #include "../../../scraper/Hexrom/include/HexromFilterModal.h"
 #include "../../../scraper/Hexrom/include/HexromScraperFilter.h"
 #include "../../../scraper/Romspedia/include/RomspediaFilterModal.h"
@@ -95,16 +92,12 @@ private:
     Mix_Chunk* moveSound = nullptr;
 
     // --- Filter modal UI (site specific via union-style void*) ---
-    enum class SiteType { Gamulator, Hexrom, Romspedia };
+    enum class SiteType { Hexrom, Romspedia };
     SiteType siteType;
     // Own concrete modals (no abstraction layer/adapters)
-    std::unique_ptr<GamulatorFilterModal> gamulatorModal;
     std::unique_ptr<HexromFilterModal> hexromModal;
     std::unique_ptr<RomspediaFilterModal> romspediaModal;
-    // Shared filter state (Gamulator uses only search; Hexrom uses indices in its modal already)
-    std::string gamulatorSearch;
-    bool gamulatorFilterActive = false;
-    std::string gamulatorOriginalConsoleUrl; // Store original console URL for filtering
+    // Shared filter state (Hexrom uses indices in its modal already)
     std::string romspediaSearch;
     bool romspediaFilterActive = false;
     std::string romspediaOriginalConsoleUrl; // Store original console URL for filtering
@@ -156,7 +149,6 @@ public:
 
 private:
     // Split out bulky constructor site-specific code for readability
-    void setupGamulatorModal();
     void setupHexromModal();
     void setupRomspediaModal();
     void runSiteFilter(const std::string& search, int region, int sort, int order, int genre);

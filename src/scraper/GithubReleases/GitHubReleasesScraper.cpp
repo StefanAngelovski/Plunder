@@ -1,4 +1,5 @@
 #include "include/GitHubReleasesScraper.h"
+#include <cstring>
 
 // Scrapes the latest release notes from a GitHub releases page
 // Returns a formatted string with the latest release title and notes, or an error message on failure.
@@ -11,23 +12,25 @@ std::string ScrapeLatestGitHubReleaseNotes(const std::string& releasesPageUrl) {
             return "Failed to fetch release notes.";
         }
 
-            // Use string search to find all <div class="markdown-body my-3"> blocks, handling nested divs
+            // Find every release-notes <div class="markdown-body ..."> block, handling nested divs.
+            // Match only the leading "markdown-body" class: GitHub changes the extra
+            // utility classes (it was "markdown-body my-3", now "markdown-body tmp-my-3").
             std::string allBodies;
             size_t mdCount = 0;
             const std::string divTag = "<div";
-            const std::string classStr = "class=\"markdown-body my-3\"";
+            const std::string classStr = "class=\"markdown-body";
             size_t pos = 0;
             const size_t maxBlocks = 20;
             while (mdCount < maxBlocks) {
                 size_t divStart = html.find(divTag, pos);
                 if (divStart == std::string::npos) break;
+                size_t tagEnd = html.find('>', divStart);
+                if (tagEnd == std::string::npos) break;
                 size_t classPos = html.find(classStr, divStart);
-                if (classPos == std::string::npos || classPos - divStart > 200) {
+                if (classPos == std::string::npos || classPos > tagEnd) {  // class must be on this <div> tag
                     pos = divStart + divTag.size();
                     continue;
                 }
-                size_t tagEnd = html.find('>', classPos);
-                if (tagEnd == std::string::npos) break;
                 size_t contentStart = tagEnd + 1;
                 // Find the matching closing </div> (handle nested divs)
                 size_t searchPos = contentStart;

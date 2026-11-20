@@ -1,5 +1,7 @@
 #include "include/MenuApplication.h"
 #include "../../utils/include/Theme.h"
+#include "../../Version.h"
+#include <regex>
 
 // ===================== Internal helper structs & constants ===================== //
 struct DetailsWithTexture { GameDetails details; SDL_Texture* texture; };
@@ -22,10 +24,12 @@ bool MenuApplication::initialize() {
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) != 0) {
         std::cerr << "SDL_mixer init failed: " << Mix_GetError() << std::endl;
     } 
+    // Smooth (linear) scaling for cover art and icons.
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
     window = SDL_CreateWindow("Trimui ROM Downloader", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_SHOWN);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    font = TTF_OpenFont("res/InterVariable.ttf", 20);
+    font = UiUtils::GetFont(20);
     if (!window || !renderer) {
         std::cerr << "Resource Creation Error" << std::endl;
         return false;
@@ -49,7 +53,6 @@ bool MenuApplication::initialize() {
 void MenuApplication::buildSiteRegistry() {
     siteRegistry.clear();
     siteRegistry.push_back({"Hexrom", std::make_shared<HexromScraper>()});
-    siteRegistry.push_back({"Gamulator", std::make_shared<GamulatorScraper>()});
     siteRegistry.push_back({"Romspedia", std::make_shared<RomspediaScraper>()});
 }
 
@@ -100,7 +103,7 @@ void MenuApplication::processEvent(const SDL_Event& e) {
 void MenuApplication::handleConsolesLoaded(std::vector<ListItem>* consolesPtr) {
     if (!consolesPtr) return;
     auto listScreen = std::make_shared<ListScreen>(
-        "Select Console", currentSite, *consolesPtr, renderer,
+        "Consoles", currentSite, *consolesPtr, renderer,
         [this](const ListItem& item) {
             std::string selectedConsoleName = item.label;
             std::string mappedFolder = getFolderForScrapedConsole(selectedConsoleName);
@@ -213,7 +216,9 @@ void MenuApplication::fetchGamesAsync(const std::string& baseUrl, int page, bool
         GameListData* gameData = new GameListData();
         gameData->games = result.first;
         gameData->pagination = result.second;
-        gameData->title = "Games";
+        // Console label without its trailing game count, e.g. "GBA ROMs (1963)" -> "GBA ROMs"
+        gameData->title = std::regex_replace(currentConsoleName, std::regex(R"(\s*\(\d+\)\s*$)"), "");
+        if (gameData->title.empty()) gameData->title = "Games";
         gameData->baseUrl = baseUrl;
         gameData->consoleName = currentConsoleName; // Use member variable for persistence
         SDL_Event event; SDL_zero(event);
@@ -252,13 +257,22 @@ void MenuApplication::fetchPatchNotesAsync(std::shared_ptr<PatchNotesScreen> pat
 
 // ===================== Misc Helpers ===================== //
 void MenuApplication::showNoInternetAndExit() {
+    using namespace UiUtils;
     while (!HttpUtils::hasInternet()) {
-        Theme::getInstance().applyBackgroundDark(renderer);
-        SDL_RenderClear(renderer);
-        if (font) {
-            UiUtils::RenderTextCentered(renderer, font, "No internet connection detected!", 1280/2, 720/2 - 40, UiUtils::Color(255,80,80));
-            UiUtils::RenderTextCentered(renderer, font, "Please connect to Wi-Fi and press any key or button to exit.", 1280/2, 720/2 + 20, UiUtils::Color(255,255,180));
-        }
+        const ThemeColors& t = Theme::getInstance().colors();
+        DrawBackground(renderer);
+        SDL_Rect panel{SCREEN_W / 2 - 300, SCREEN_H / 2 - 150, 600, 270};
+        DrawPanel(renderer, panel, 24);
+        // warning glyph: "!" in a ring
+        const SDL_Color red{239, 93, 93, 255};
+        int cx = panel.x + panel.w / 2, cy = panel.y + 66;
+        FillCircle(renderer, cx, cy, 32, WithAlpha(red, 45));
+        StrokeRoundedRect(renderer, SDL_Rect{cx - 22, cy - 22, 44, 44}, 22, 4, red);
+        FillRoundedRect(renderer, SDL_Rect{cx - 2, cy - 12, 5, 16}, 2, red);
+        FillCircle(renderer, cx, cy + 10, 3, red);
+        RenderTextCentered(renderer, GetFont(26, true), "No internet connection", cx, panel.y + 132, Color(t.textPrimary));
+        RenderTextCentered(renderer, GetFont(18), "Connect to Wi-Fi to browse ROM sites.", cx, panel.y + 172, Color(t.textSecondary));
+        RenderTextCentered(renderer, GetFont(16), "Press any button to exit", cx, panel.y + 222, Color(WithAlpha(t.textSecondary, 180)));
         SDL_RenderPresent(renderer);
         SDL_Event e; bool exitLoop = false;
         while (SDL_PollEvent(&e)) {
@@ -271,7 +285,8 @@ void MenuApplication::showNoInternetAndExit() {
 }
 
 void MenuApplication::cleanup() {
-    if (font) TTF_CloseFont(font);
+    UiUtils::ShutdownFonts();
+    font = nullptr;
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
     IMG_Quit();
@@ -292,7 +307,9 @@ void MenuApplication::initController() {
 }
 
 void MenuApplication::setupScreens() {
-    auto carousel = std::make_shared<CarouselMenuScreen>("Main Menu");
+    auto carousel = std::make_shared<CarouselMenuScreen>("Home");
+    carousel->setSubtitle("Plunder  v" + std::string(PLUNDER_VERSION));
+    carousel->setShowBackHint(false);
     auto loadRomSite = [this](size_t siteIdx) {
         if (siteIdx >= siteRegistry.size()) return;
         currentSiteIndex = (int)siteIdx;
@@ -304,6 +321,7 @@ void MenuApplication::setupScreens() {
     };
     carousel->addItem("Rom Sites", "", [this, loadRomSite]() {
         auto romSites = std::make_shared<CarouselMenuScreen>("ROM Sites");
+        romSites->setSubtitle("Choose a source");
         for (size_t i = 0; i < siteRegistry.size(); ++i) {
             const auto& sd = siteRegistry[i];
             romSites->addItem(sd.id, "", [this, loadRomSite, i]() { loadRomSite(i); });

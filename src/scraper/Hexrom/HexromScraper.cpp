@@ -217,16 +217,20 @@ GameDetails HexromScraper::fetchGameDetails(const std::string& gameUrl) {
     std::string html = HttpUtils::fetchWebContent(gameUrl);
     if (html.empty()) return details;
 
-    // Only extract title from the <th>Name<td> row in the details table
-    std::regex nameRowRegex(R"(<th>\s*Name\s*<td>([^<]+))", std::regex::icase);
+    // Title: legacy <th>Name<td> row if present, otherwise the page <h1>
+    // (current Hexrom layout has no Name row).
+    std::regex nameRowRegex(R"(<th>\s*Name\s*(?:</th>)?\s*<td>([^<]+))", std::regex::icase);
+    std::regex h1Regex(R"(<h1[^>]*>([^<]+))", std::regex::icase);
     std::smatch nameMatch;
     if (std::regex_search(html, nameMatch, nameRowRegex) && nameMatch.size() > 1) {
         details.title = StringUtils::cleanHtmlText(nameMatch[1].str());
+    } else if (std::regex_search(html, nameMatch, h1Regex) && nameMatch.size() > 1) {
+        details.title = StringUtils::cleanHtmlText(nameMatch[1].str());
     } else {
-        details.title = ""; // No fallback, leave empty if not found
+        details.title = "";
     }
     // Extract Size field from details table
-    std::regex sizeRowRegex(R"(<th>\s*Size\s*<td>([^<\n]+))", std::regex::icase);
+    std::regex sizeRowRegex(R"(<th>\s*Size\s*(?:</th>)?\s*<td>([^<\n]+))", std::regex::icase);
     std::smatch sizeMatch;
     if (std::regex_search(html, sizeMatch, sizeRowRegex) && sizeMatch.size() > 1) {
         details.fileSize = StringUtils::cleanHtmlText(sizeMatch[1].str());
@@ -234,7 +238,7 @@ GameDetails HexromScraper::fetchGameDetails(const std::string& gameUrl) {
         details.fileSize = "";
     }
     // Extract Publish (release date)
-    std::regex publishRowRegex(R"(<th>\s*Publish\s*<td>([^<\n]+))", std::regex::icase);
+    std::regex publishRowRegex(R"(<th>\s*Publish\s*(?:</th>)?\s*<td>([^<\n]+))", std::regex::icase);
     std::smatch publishMatch;
     if (std::regex_search(html, publishMatch, publishRowRegex) && publishMatch.size() > 1) {
         details.releaseDate = StringUtils::cleanHtmlText(publishMatch[1].str());
@@ -259,7 +263,7 @@ GameDetails HexromScraper::fetchGameDetails(const std::string& gameUrl) {
         }
     }
     // Extract Language
-    std::regex langRowRegex(R"(<th>\s*Language\s*<td>([^<\n]+))", std::regex::icase);
+    std::regex langRowRegex(R"(<th>\s*(?:Language|Region)\s*(?:</th>)?\s*<td>([^<\n]+))", std::regex::icase);
     std::smatch langMatch;
     if (std::regex_search(html, langMatch, langRowRegex) && langMatch.size() > 1) {
         details.language = StringUtils::cleanHtmlText(langMatch[1].str());

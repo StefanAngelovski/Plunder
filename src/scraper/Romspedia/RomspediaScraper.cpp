@@ -279,7 +279,7 @@ std::pair<std::vector<ListItem>, PaginationInfo> RomspediaScraper::fetchGames(co
     
     // Check if this is a search URL
     if (consoleUrl.find("search?search_term_string=") != std::string::npos) {
-        // Handle search URLs directly in fetchGames (like Gamulator does)
+        // Handle search URLs directly in fetchGames 
         std::cout << "[RomspediaScraper] fetchGames handling search URL: " << consoleUrl << std::endl;
         
         // Set up base URL without page parameter for pagination
@@ -289,7 +289,7 @@ std::pair<std::vector<ListItem>, PaginationInfo> RomspediaScraper::fetchGames(co
         }
         pagination.baseUrl = baseSearchUrl;
         pagination.currentPage = page;
-        pagination.totalPages = 999; // High value like Gamulator, will stop when no more results
+        pagination.totalPages = 999; // High value, will stop when no more results
         
         std::cout << "[RomspediaScraper] DEBUG: Set pagination.baseUrl to: " << pagination.baseUrl << std::endl;
         
@@ -418,7 +418,7 @@ std::pair<std::vector<ListItem>, PaginationInfo> RomspediaScraper::fetchGames(co
     return {games, pagination};
 }
 
-// Download and extract ROM for Romspedia, matching Hexrom/Gamulator
+// Download and extract ROM for Romspedia, matching Hexrom
 bool RomspediaScraper::downloadRom(const GameDetails& details) {
     // Use title for ROM name, sanitize for filesystem
     std::string romName = details.title;
